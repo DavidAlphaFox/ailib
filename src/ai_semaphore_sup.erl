@@ -15,18 +15,18 @@
 
 %% Supervisor callbacks
 -export([init/1]).
--export([start_named_semphore/2,start_unnamed_semphore/1]).
+-export([start_named_semaphore/2,start_unnamed_semaphore/1]).
 
 -define(SERVER, ?MODULE).
 
 %%%===================================================================
 %%% API functions
 %%%===================================================================
--spec start_named_semphore(Name :: atom(),Opts :: proplists:proplists())->{ok,pid()}.
-start_named_semphore(Name,Opts)->
+-spec start_named_semaphore(Name :: atom(),Opts :: proplists:proplists())->{ok,pid()}.
+start_named_semaphore(Name,Opts)->
     supervisor:start_child(?SERVER,[Name,Opts]).
--spec start_unnamed_semphore(Opts :: proplists:proplists())->{ok,pid()}.
-start_unnamed_semphore(Opts)->
+-spec start_unnamed_semaphore(Opts :: proplists:proplists())->{ok,pid()}.
+start_unnamed_semaphore(Opts)->
     supervisor:start_child(?SERVER,[Opts]).
 %%--------------------------------------------------------------------
 %% @doc
@@ -63,13 +63,13 @@ init([]) ->
                  intensity => 1,
                  period => 5},
 
-    Semphore = #{id => ai_semaphore,
+    Semaphore = #{id => ai_semaphore,
                start => {ai_semaphore, start_link, []},
                restart => permanent,
                shutdown => 5000,
                type => worker,
                modules => [ai_semaphore]},
-    {ok, {SupFlags, [Semphore]}}.
+    {ok, {SupFlags, [Semaphore]}}.
 
 %%%===================================================================
 %%% Internal functions

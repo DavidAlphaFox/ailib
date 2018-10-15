@@ -22,13 +22,13 @@
 -export([release/1,release/2]).
 -define(SERVER, ?MODULE).
 
--record(semphore,{
+-record(semaphore,{
 	total :: integer(),
 	avalible :: integer()
 }).
 
 -record(state, {
-	semphores :: maps:maps(),
+	semaphores :: maps:maps(),
 	waiters :: maps:maps(),
 	monitors :: maps:maps()
 }).
@@ -36,32 +36,32 @@
 %%%===================================================================
 %%% API 
 %%%===================================================================
--spec create(Semphore :: atom(),Count :: integer())-> {ok,pid()}.
-create(Semphore,Count)->
+-spec create(Semaphore :: atom(),Count :: integer())-> {ok,pid()}.
+create(Semaphore,Count)->
 	Opts = [
-		{semphores = maps:from_list([{Semphore,#semphore{total = Count,avalible = Count}}])}
+		{semaphores, maps:from_list([{Semaphore,#semaphore{total = Count,avalible = Count}}])}
 	],
-	ai_semaphore_sup:start_named_semphore(Semphore,Opts).
+	ai_semaphore_sup:start_named_semaphore(Semaphore,Opts).
 
--spec wait(Semphore :: pid()| atom()) -> ok.
-wait(Semphore) when erlang:is_pid(Semphore)->
-	wait(Semphore,?SERVER);
-wait(Semphore) ->
-		wait(Semphore,Semphore).
--spec wait(Semphore :: atom() | pid(),Key::binary() | atom()) -> ok.
-wait(Semphore,Key)->
+-spec wait(Semaphore :: pid()| atom()) -> ok.
+wait(Semaphore) when erlang:is_pid(Semaphore)->
+	wait(Semaphore,?SERVER);
+wait(Semaphore) ->
+		wait(Semaphore,Semaphore).
+-spec wait(Semaphore :: atom() | pid(),Key::binary() | atom()) -> ok.
+wait(Semaphore,Key)->
 	Caller = self(),
-	gen_server:call(Semphore,{wait,Caller,Key},infinity).
+	gen_server:call(Semaphore,{wait,Caller,Key},infinity).
 
--spec release(Semphore :: atom() | pid()) -> ok.
-release(Semphore) when erlang:is_pid(Semphore)->
-	release(Semphore,?SERVER);
-release(Semphore) ->
-	release(Semphore,Semphore).
--spec release(Semphore :: atom() | pid(),Key::binary() | atom()) -> ok.
-release(Semphore,Key)->
+-spec release(Semaphore :: atom() | pid()) -> ok.
+release(Semaphore) when erlang:is_pid(Semaphore)->
+	release(Semaphore,?SERVER);
+release(Semaphore) ->
+	release(Semaphore,Semaphore).
+-spec release(Semaphore :: atom() | pid(),Key::binary() | atom()) -> ok.
+release(Semaphore,Key)->
 	Caller = self(),
-	gen_server:cast(Semphore,{release,Caller,Key}).
+	gen_server:cast(Semaphore,{release,Caller,Key}).
 %%--------------------------------------------------------------------
 %% @doc
 %% Starts the server
@@ -99,9 +99,9 @@ start_link(Name,Opts) ->
 	ignore.
 init(Opts) ->
 	process_flag(trap_exit, true),
-	Semphores = proplists:get_value(semphores,Opts),
+	Semaphores = proplists:get_value(semaphores,Opts),
 	{ok, #state{
-		semphores = Semphores,
+		semaphores = Semaphores,
 		waiters = maps:new(),
 		monitors = maps:new()
 	}}.
@@ -121,8 +121,8 @@ init(Opts) ->
 	{noreply, NewState :: term(), hibernate} |
 	{stop, Reason :: term(), Reply :: term(), NewState :: term()} |
 	{stop, Reason :: term(), NewState :: term()}.
-handle_call({wait,Caller,Key},From,#state{semphores = Semphores} = State)->
-		try_wait_semphore(maps:get(Key,Semphores,undefined),Caller,Key,From,State);
+handle_call({wait,Caller,Key},From,#state{semaphores = Semaphores} = State)->
+		try_wait_semaphore(maps:get(Key,Semaphores,undefined),Caller,Key,From,State);
 handle_call(_Request, _From, State) ->
 	Reply = ok,
 	{reply, Reply, State}.
@@ -138,6 +138,9 @@ handle_call(_Request, _From, State) ->
 	{noreply, NewState :: term(), Timeout :: timeout()} |
 	{noreply, NewState :: term(), hibernate} |
 	{stop, Reason :: term(), NewState :: term()}.
+handle_cast({release,Caller,Key},State)->
+		NState = release_semaphore(Caller,Key,State),
+		{noreply,NState};
 handle_cast(_Request, State) ->
 	{noreply, State}.
 
@@ -155,8 +158,8 @@ handle_cast(_Request, State) ->
 handle_info({'EXIT', _From, noproc},State)->
 	{noreply,State};
 handle_info({'EXIT', From, _Reason},{monitors = Monitors} = State)->
-	Semphores = maps:get(From,Monitors,[]),
-	NState = release_semphores(Semphores,State),
+	Semaphores = maps:get(From,Monitors,[]),
+	NState = release_semaphores(Semaphores,State),
 	{noreply,NState#state{monitors = maps:remove(From,Monitors)}};
 
 handle_info(_Info, State) ->
@@ -208,14 +211,14 @@ format_status(_Opt, Status) ->
 monitor_locker(Key,Caller,MS)->
 	case maps:get(Caller,MS,undefined) of
 		undefined ->
-			link(Caller),
+			erlang:link(Caller),
 			maps:put(Caller,[Key],MS);
 		L ->
 			maps:update(Caller,L ++ [Key],MS)
 	end.
-try_wait_semphore(undefined,_Caller,_Key,_From,State)->
+try_wait_semaphore(undefined,_Caller,_Key,_From,State)->
 	{reply,{error,not_init},State};
-try_wait_semphore(#semphore{avalible = 0},Caller,Key,From,
+try_wait_semaphore(#semaphore{avalible = 0},Caller,Key,From,
 	#state{waiters = WS} = State) ->
 	NWS =
 		case maps:get(Key,WS,undefined) of
@@ -225,31 +228,45 @@ try_wait_semphore(#semphore{avalible = 0},Caller,Key,From,
 				maps:update(Key,W ++ [{Caller,From}],WS)	
 		end,
 	{noreply,State#state{waiters = NWS}};
-try_wait_semphore(#semphore{avalible = Avalible} = Sem,Caller,Key,_From,
-	#state{semphores = Sems, monitors = MS} = State) ->
-		NSem = Sem#semphore{avalible = Avalible -1},
+try_wait_semaphore(#semaphore{avalible = Avalible} = Sem,Caller,Key,_From,
+	#state{semaphores = Sems, monitors = MS} = State) ->
+		NSem = Sem#semaphore{avalible = Avalible -1},
 		NMS = monitor_locker(Key,Caller,MS),
-		{reply,ok,State#state{semphores = maps:update(Key,NSem,Sems),monitors = NMS}}.
-release_semphores([],State)->
+		{reply,ok,State#state{semaphores = maps:update(Key,NSem,Sems),monitors = NMS}}.
+
+release_semaphore(Caller,Key,#state{monitors = MS} = State)->
+	M = maps:get(Caller,MS,[]),
+	NM = lists:filter(fun(I) -> I /= Key end,M),
+	NState = if 
+		NM == [] -> 
+			erlang:unlink(Caller),
+			State#state{monitors = maps:remove(Caller,MS)};
+		true -> 
+			State#state{monitors = maps:put(Caller,NM,MS)}
+	end,
+	release_semaphores([Key],NState).
+
+release_semaphores([],State)->
 	State;
-release_semphores(Semphores,#state{semphores = Sems,waiters = WS,monitors = MS} = State)->
+release_semaphores(Semaphores,#state{semaphores = Sems,waiters = WS,monitors = MS} = State)->
 		{NSems,NWS,NMS}	= lists:foldl(fun(I,{SemsAcc,WsAcc,MsAcc})->
 												Sem = maps:get(I,SemsAcc),
 												W = maps:get(I,WsAcc,[]),
-												{NSem,NW,NMsAcc} = notify_semphore_waiters(I,Sem,W,MsAcc),
+												{NSem,NW,NMsAcc} = notify_semaphore_waiters(I,Sem,W,MsAcc),
 												{maps:update(I,NSem,SemsAcc),maps:put(I,NW,WsAcc),NMsAcc}
-												end,{Sems,WS,MS},Semphores),
-		State#state{semphores = NSems,waiters = NWS,monitors = NMS}.
+												end,{Sems,WS,MS},Semaphores),
+		State#state{semaphores = NSems,waiters = NWS,monitors = NMS}.
 
-notify_semphore_waiters(_Key,Sem,[],MS)->
-	{Sem#semphore{avalible = Sem#semphore.avalible + 1},[],MS};
-notify_semphore_waiters(Key,Sem,[H|T],MS) ->
+notify_semaphore_waiters(_Key,Sem,[],MS)->
+	{Sem#semaphore{avalible = Sem#semaphore.avalible + 1},[],MS};
+notify_semaphore_waiters(Key,Sem,[H|T],MS) ->
 	{Caller,From} = H,
-	case erlang:is_alive(Caller) of
+	case erlang:is_process_alive(Caller) of
 		true ->
 					NMS = monitor_locker(Key,Caller,MS),
 					gen_server:reply(From,ok),
 					{Sem,T,NMS};
 		_ ->
-				notify_semphore_waiters(Key,Sem,T,MS)
+				notify_semaphore_waiters(Key,Sem,T,MS)
 	end.
+
