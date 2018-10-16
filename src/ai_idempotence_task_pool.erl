@@ -2,41 +2,43 @@
 %%% @author David Gao <david@laptop-02.local>
 %%% @copyright (C) 2018, David Gao
 %%% @doc
-%%% idempotence task can use one request to answer all at same time
+%%%
 %%% @end
-%%% Created : 15 Oct 2018 by David Gao <david@laptop-02.local>
+%%% Created : 16 Oct 2018 by David Gao <david@laptop-02.local>
 %%%-------------------------------------------------------------------
--module(ai_idempotence_task_worker).
+-module(ai_idempotence_task_pool).
 
 -behaviour(gen_server).
--behaviour(poolboy_worker).
 
 %% API
--export([start_link/1]).
+-export([start_link/0]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
-	terminate/2, code_change/3, format_status/2]).
+         terminate/2, code_change/3, format_status/2]).
+
+-export([handle_result/2]).
 
 -define(SERVER, ?MODULE).
 
--record(state, {args}).
+-record(state, {}).
 
 %%%===================================================================
 %%% API
 %%%===================================================================
-
+handle_result(Pool,Result)->
+    gen_server:cast(Pool,Result).
 %%--------------------------------------------------------------------
 %% @doc
 %% Starts the server
 %% @end
 %%--------------------------------------------------------------------
--spec start_link(Args :: proplists:proplists()) -> {ok, Pid :: pid()} |
-	{error, Error :: {already_started, pid()}} |
-	{error, Error :: term()} |
-	ignore.
-start_link(Args) ->
-	gen_server:start_link(?MODULE,Args, []).
+-spec start_link() -> {ok, Pid :: pid()} |
+                      {error, Error :: {already_started, pid()}} |
+                      {error, Error :: term()} |
+                      ignore.
+start_link() ->
+    gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
 
 %%%===================================================================
 %%% gen_server callbacks
@@ -49,13 +51,13 @@ start_link(Args) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec init(Args :: term()) -> {ok, State :: term()} |
-	{ok, State :: term(), Timeout :: timeout()} |
-	{ok, State :: term(), hibernate} |
-	{stop, Reason :: term()} |
-	ignore.
-init(Args) ->
-%%	process_flag(trap_exit, true),
-	{ok, #state{args = Args}}.
+                              {ok, State :: term(), Timeout :: timeout()} |
+                              {ok, State :: term(), hibernate} |
+                              {stop, Reason :: term()} |
+                              ignore.
+init([]) ->
+    process_flag(trap_exit, true),
+    {ok, #state{}}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -64,17 +66,17 @@ init(Args) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec handle_call(Request :: term(), From :: {pid(), term()}, State :: term()) ->
-	{reply, Reply :: term(), NewState :: term()} |
-	{reply, Reply :: term(), NewState :: term(), Timeout :: timeout()} |
-	{reply, Reply :: term(), NewState :: term(), hibernate} |
-	{noreply, NewState :: term()} |
-	{noreply, NewState :: term(), Timeout :: timeout()} |
-	{noreply, NewState :: term(), hibernate} |
-	{stop, Reason :: term(), Reply :: term(), NewState :: term()} |
-	{stop, Reason :: term(), NewState :: term()}.
+                         {reply, Reply :: term(), NewState :: term()} |
+                         {reply, Reply :: term(), NewState :: term(), Timeout :: timeout()} |
+                         {reply, Reply :: term(), NewState :: term(), hibernate} |
+                         {noreply, NewState :: term()} |
+                         {noreply, NewState :: term(), Timeout :: timeout()} |
+                         {noreply, NewState :: term(), hibernate} |
+                         {stop, Reason :: term(), Reply :: term(), NewState :: term()} |
+                         {stop, Reason :: term(), NewState :: term()}.
 handle_call(_Request, _From, State) ->
-	Reply = ok,
-	{reply, Reply, State}.
+    Reply = ok,
+    {reply, Reply, State}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -83,22 +85,12 @@ handle_call(_Request, _From, State) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec handle_cast(Request :: term(), State :: term()) ->
-	{noreply, NewState :: term()} |
-	{noreply, NewState :: term(), Timeout :: timeout()} |
-	{noreply, NewState :: term(), hibernate} |
-	{stop, Reason :: term(), NewState :: term()}.
-handle_cast({task,Key,Ctx,Caller,MFA}, State)->
-		{M,F,A} = MFA,
-		try 
-			Result = erlang:apply(M,F,A ++ [Key,Ctx]),
-			ai_idempotence_task_pool:handle_result(Caller,{done,Result})
-		catch
-			Error:Reason ->
-				ai_idempotence_task_pool:handle_result(Caller,{error,Error,Reason})
-		end,
-		{noreply,State};
+                         {noreply, NewState :: term()} |
+                         {noreply, NewState :: term(), Timeout :: timeout()} |
+                         {noreply, NewState :: term(), hibernate} |
+                         {stop, Reason :: term(), NewState :: term()}.
 handle_cast(_Request, State) ->
-	{noreply, State}.
+    {noreply, State}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -107,12 +99,12 @@ handle_cast(_Request, State) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec handle_info(Info :: timeout() | term(), State :: term()) ->
-	{noreply, NewState :: term()} |
-	{noreply, NewState :: term(), Timeout :: timeout()} |
-	{noreply, NewState :: term(), hibernate} |
-	{stop, Reason :: normal | term(), NewState :: term()}.
+                         {noreply, NewState :: term()} |
+                         {noreply, NewState :: term(), Timeout :: timeout()} |
+                         {noreply, NewState :: term(), hibernate} |
+                         {stop, Reason :: normal | term(), NewState :: term()}.
 handle_info(_Info, State) ->
-	{noreply, State}.
+    {noreply, State}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -124,9 +116,9 @@ handle_info(_Info, State) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec terminate(Reason :: normal | shutdown | {shutdown, term()} | term(),
-	State :: term()) -> any().
+                State :: term()) -> any().
 terminate(_Reason, _State) ->
-	ok.
+    ok.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -135,11 +127,11 @@ terminate(_Reason, _State) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec code_change(OldVsn :: term() | {down, term()},
-	State :: term(),
-	Extra :: term()) -> {ok, NewState :: term()} |
-	{error, Reason :: term()}.
+                  State :: term(),
+                  Extra :: term()) -> {ok, NewState :: term()} |
+                                      {error, Reason :: term()}.
 code_change(_OldVsn, State, _Extra) ->
-	{ok, State}.
+    {ok, State}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -150,9 +142,9 @@ code_change(_OldVsn, State, _Extra) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec format_status(Opt :: normal | terminate,
-	Status :: list()) -> Status :: term().
+                    Status :: list()) -> Status :: term().
 format_status(_Opt, Status) ->
-	Status.
+    Status.
 
 %%%===================================================================
 %%% Internal functions

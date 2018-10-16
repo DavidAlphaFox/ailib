@@ -15,18 +15,14 @@
 
 %% Supervisor callbacks
 -export([init/1]).
--export([start_named_semaphore/2,start_unnamed_semaphore/1]).
+-export([start_semaphore/1]).
 
 -define(SERVER, ?MODULE).
 
 %%%===================================================================
 %%% API functions
 %%%===================================================================
--spec start_named_semaphore(Name :: atom(),Opts :: proplists:proplists())->{ok,pid()}.
-start_named_semaphore(Name,Opts)->
-    supervisor:start_child(?SERVER,[Name,Opts]).
--spec start_unnamed_semaphore(Opts :: proplists:proplists())->{ok,pid()}.
-start_unnamed_semaphore(Opts)->
+start_semaphore(Opts)->
     supervisor:start_child(?SERVER,[Opts]).
 %%--------------------------------------------------------------------
 %% @doc
