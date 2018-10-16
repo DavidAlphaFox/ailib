@@ -157,7 +157,7 @@ handle_cast({release,Caller},#state{monitors = M} = State)->
             {noreply,State};
         MRef ->
             demonitor_process(MRef),
-            NewState = release_semaphore(State),
+            NewState = release_semaphore(State#state{monitors = maps:remove(Caller,M)}),
             {noreply,NewState}
     end;
 handle_cast(destroy,#state{monitors = M} = State)->
