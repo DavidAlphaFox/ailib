@@ -20,7 +20,7 @@
 -export([task_run/3]).
 -define(SERVER, ?MODULE).
 
--record(state, {args}).
+-record(state, {}).
 
 %%%===================================================================
 %%% API
@@ -55,9 +55,9 @@ start_link(Args) ->
 	{ok, State :: term(), hibernate} |
 	{stop, Reason :: term()} |
 	ignore.
-init(Args) ->
+init(_Args) ->
 %%	process_flag(trap_exit, true),
-	{ok, #state{args = Args}}.
+	{ok, #state{}}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -93,10 +93,10 @@ handle_cast({task,Key,Ctx,Caller}, State)->
     {M,F,A} = Ctx,
 		try
 			Result = erlang:apply(M,F,A),
-			ai_idempotence_task_pool:task_finish(Caller,Key,{done,Result})
+			ai_idempotence_pool:task_finish(Caller,Key,{done,Result})
 		catch
 			Error:Reason ->
-				ai_idempotence_task_pool:task_finish(Caller,Key,{error,Error,Reason})
+				ai_idempotence_pool:task_finish(Caller,Key,{error,Error,Reason})
 		end,
 		{noreply,State};
 handle_cast(_Request, State) ->

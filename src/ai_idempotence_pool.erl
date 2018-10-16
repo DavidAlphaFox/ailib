@@ -2,11 +2,15 @@
 %%% @author David Gao <david@laptop-02.local>
 %%% @copyright (C) 2018, David Gao
 %%% @doc
-%%%
+%%%	an idempotence pool looks like a fire and forget semaphore
+%%% the `Key` is base on `Ctx`
+%%% if some processes want to do a task which `Ctx` is same
+%%% the process of pool will only schedule the task once 
+%%% and notify the result to all waitting processes.
 %%% @end
 %%% Created : 16 Oct 2018 by David Gao <david@laptop-02.local>
 %%%-------------------------------------------------------------------
--module(ai_idempotence_task_pool).
+-module(ai_idempotence_pool).
 
 -behaviour(gen_server).
 
