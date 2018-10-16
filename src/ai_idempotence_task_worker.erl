@@ -17,7 +17,7 @@
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
 	terminate/2, code_change/3, format_status/2]).
-
+-export([task_run/3]).
 -define(SERVER, ?MODULE).
 
 -record(state, {args}).
@@ -25,7 +25,9 @@
 %%%===================================================================
 %%% API
 %%%===================================================================
-
+task_run(Worker,Key,Ctx)->
+    Caller = self(),
+    gen_server:cast(Worker,{task,Key,Ctx,Caller}).
 %%--------------------------------------------------------------------
 %% @doc
 %% Starts the server
@@ -87,14 +89,14 @@ handle_call(_Request, _From, State) ->
 	{noreply, NewState :: term(), Timeout :: timeout()} |
 	{noreply, NewState :: term(), hibernate} |
 	{stop, Reason :: term(), NewState :: term()}.
-handle_cast({task,Key,Ctx,Caller,MFA}, State)->
-		{M,F,A} = MFA,
-		try 
-			Result = erlang:apply(M,F,A ++ [Key,Ctx]),
-			ai_idempotence_task_pool:handle_result(Caller,{done,Result})
+handle_cast({task,Key,Ctx,Caller}, State)->
+    {M,F,A} = Ctx,
+		try
+			Result = erlang:apply(M,F,A),
+			ai_idempotence_task_pool:task_finish(Caller,Key,{done,Result})
 		catch
 			Error:Reason ->
-				ai_idempotence_task_pool:handle_result(Caller,{error,Error,Reason})
+				ai_idempotence_task_pool:task_finish(Caller,Key,{error,Error,Reason})
 		end,
 		{noreply,State};
 handle_cast(_Request, State) ->

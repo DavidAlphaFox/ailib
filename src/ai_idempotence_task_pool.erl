@@ -11,34 +11,49 @@
 -behaviour(gen_server).
 
 %% API
--export([start_link/0]).
+-export([start_link/1]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3, format_status/2]).
 
--export([handle_result/2]).
+-export([task_add/3,task_finish/3]).
 
 -define(SERVER, ?MODULE).
 
--record(state, {}).
+-record(state, {
+                tasks :: maps:maps(),
+                running :: list(),
+                waitting :: list(),
+                observers :: maps:maps(),
+                notify_pool :: atom(),
+                running_pool :: atom(),
+                max_concurrent :: integer(),
+                current_running :: integer()
+               }).
 
 %%%===================================================================
 %%% API
 %%%===================================================================
-handle_result(Pool,Result)->
-    gen_server:cast(Pool,Result).
+-spec task_add(Pool :: pid(),Key :: binary()|atom(),Ctx :: term()) -> {done,term()} | {error,term(),term()}.
+task_add(Pool,Key,Ctx)->
+    Caller = self(),
+    gen_server:call(Pool,{task_add,Key,Ctx,Caller},infinity).
+-spec task_finish(Pool :: pid(), Key :: binary() | atom(),
+                  Result :: {done,term()} | {error,term(),term()}) -> ok.
+task_finish(Pool,Key,Result)->
+    gen_server:cast(Pool,{task_finish,Key,Result}).
 %%--------------------------------------------------------------------
 %% @doc
 %% Starts the server
 %% @end
 %%--------------------------------------------------------------------
--spec start_link() -> {ok, Pid :: pid()} |
+-spec start_link(Opts :: proplists:proplists()) -> {ok, Pid :: pid()} |
                       {error, Error :: {already_started, pid()}} |
                       {error, Error :: term()} |
                       ignore.
-start_link() ->
-    gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
+start_link(Opts) ->
+    gen_server:start_link(?MODULE, Opts, []).
 
 %%%===================================================================
 %%% gen_server callbacks
@@ -55,9 +70,15 @@ start_link() ->
                               {ok, State :: term(), hibernate} |
                               {stop, Reason :: term()} |
                               ignore.
-init([]) ->
-    process_flag(trap_exit, true),
-    {ok, #state{}}.
+init(Opts) ->
+    NotifyPool = proplists:get_value(notify_pool,Opts),
+    RunningPool = proplists:get_value(running_pool,Opts),
+    MaxConcurrent = proplists:get_value(max_concurrent,Opts,10),
+    {ok, #state{ tasks = maps:new(),
+                 observers = maps:new(),running = [],waitting = [],
+                 notify_pool = NotifyPool,running_pool = RunningPool,
+                 max_concurrent = MaxConcurrent,current_running = 0
+           }}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -74,6 +95,10 @@ init([]) ->
                          {noreply, NewState :: term(), hibernate} |
                          {stop, Reason :: term(), Reply :: term(), NewState :: term()} |
                          {stop, Reason :: term(), NewState :: term()}.
+handle_call({task_add,Key,Ctx,Caller},From,State)->
+    NewState0 = task_add(Key,Ctx,Caller,From, State),
+    NewState = try_schedule_task(Key,NewState0),
+    {noreply,NewState};
 handle_call(_Request, _From, State) ->
     Reply = ok,
     {reply, Reply, State}.
@@ -89,6 +114,10 @@ handle_call(_Request, _From, State) ->
                          {noreply, NewState :: term(), Timeout :: timeout()} |
                          {noreply, NewState :: term(), hibernate} |
                          {stop, Reason :: term(), NewState :: term()}.
+handle_cast({task_finish,Key,Result},State)->
+    NewState0 = try_wakeup_observers(Key,Result,State),
+    NewState = try_finish_task(Key,NewState0),
+    {noreply,NewState};
 handle_cast(_Request, State) ->
     {noreply, State}.
 
@@ -149,3 +178,62 @@ format_status(_Opt, Status) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+running_pool(#state{running_pool = undefined})-> idempotence_task_running_pool;
+running_pool(#state{running_pool = Name}) -> Name.
+notify_pool(#state{notify_pool = undefined}) -> idempotence_task_notify_pool;
+notify_pool(#state{notify_pool = Name}) ->  Name.
+
+task_add(Key,Ctx,Caller,From,#state{tasks = T} =  State)->    
+    case maps:is_key(Key,T) of
+        true ->
+            observer_add(Key,Caller,From,State);
+        _ ->
+            observer_add(Key,Caller,From,State#state{tasks = maps:put(Key,Ctx,T)})
+    end.
+observer_add(Key,Caller,From,#state{observers = O} = State)->
+    Items = maps:get(Key,O,[]),
+    State#state{
+      observers = maps:put(Key,[{Caller,From}|Items],O)
+     }.
+
+try_schedule_task(Key,#state{waitting = W, max_concurrent = MaxRunning,current_running = MaxRunning } = State)->
+    State#state{ waitting = queue:in(Key,W)};
+try_schedule_task(Key,#state{tasks = T, running = R, current_running = CurrentRunning} = State) ->
+    Ctx = maps:get(Key,T),
+    RunningPool = running_pool(State),
+    poolboy:transaction(RunningPool, fun(Worker) ->
+                                             ai_idempotence_task_worker:task_run(Worker,Key,Ctx)
+                                     end),
+    State#state{
+      running = queue:in(Key,R),
+      current_running = CurrentRunning  + 1
+     }.
+
+try_wakeup_observers(Key,Result,#state{observers = O} = State)->
+    Items = maps:get(Key,O,[]),
+    NotifyPool = notify_pool(State),
+    poolboy:transaction(NotifyPool,fun(Worker)->
+                                           ai_idempotence_task_notify:notify(Worker,Items,Result)
+                                   end),
+    State#state{
+      observers = maps:remove(Key,O)
+     }.
+
+try_finish_task(Key,#state{tasks = T,running = R,waitting = W, current_running = CurrentRunning} = State)->
+    case queue:out(W) of
+        {{value,NextTask},W2} ->
+            NewState = State#state{
+                         tasks = maps:remove(Key,T),
+                         running = queue:filter(fun(I) -> I /= Key end,R),
+                         waitting = W2,
+                         current_running = CurrentRunning -1
+                        },
+            try_schedule_task(NextTask,NewState);
+        _ ->
+            State#state{
+              tasks = maps:remove(Key,T),
+              running = queue:filter(fun(I) -> I /= Key end,R),
+              current_running = CurrentRunning -1
+             }
+    end.
+    

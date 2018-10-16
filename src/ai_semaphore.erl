@@ -106,7 +106,6 @@ start_link(Name,Opts) ->
 	{stop, Reason :: term()} |
 	ignore.
 init(Opts) ->
-	process_flag(trap_exit, true),
 	Avalible = proplists:get_value(avalible,Opts),
 	{ok, #state{
     total = Avalible,
