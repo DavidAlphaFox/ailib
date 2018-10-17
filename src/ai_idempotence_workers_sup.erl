@@ -57,33 +57,32 @@ init([]) ->
     SupFlags = #{strategy => one_for_one,
                  intensity => 1,
                  period => 5},
-
-    AChild = #{id => 'AName',
-               start => {'AModule', start_link, []},
-               restart => permanent,
-               shutdown => 5000,
-               type => worker,
-               modules => ['AModule']},
-
-    {ok, {SupFlags, [AChild]}}.
+    PoolSpecs = worker_pool_specs(),
+    {ok, {SupFlags, PoolSpecs}}.
 
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
 default_woker_pool()->
-    maps:from_list(
-      [
-       {idempotence_task_notify_pool, {idempotence_task_notify_pool,
-                                       [{size,40},{worker_module,ai_idempotence_notify_worker}],[]}},
-       {idempotence_task_running_pool, {idempotence_task_running_pool,
-                                        [{size,10},{worker_module,ai_idempotence_task_worker},{strategy,fifo}],[]}}
-      ]).
+      [{idempotence_task_notify_pool,
+        [{size,40},{worker_module,ai_idempotence_notify_worker},{strategy,fifo}],[]},
+       {idempotence_task_running_pool,
+        [{size,10},{worker_module,ai_idempotence_task_worker},{strategy,fifo}],[]}
+      ].
 worker_pool_specs()->
-    {ok, Pools} = application:get_env(ailib, idempotence_poolboy),
-    PoolMaps = lists:foldl(fun({Name,Args,WorkerArgs},Acc)->
-                                   maps:put(Name,{Name,Args,WorkerArgs},Acc)
-                           end,default_woker_pool(),Pools),
-    MergedPools = maps:values(PoolMaps),
+    {ok, PoolConf} = application:get_env(ailib, ai_idempotence_poolboy),
+    MergedPools = lists:map(fun({Name,Args,WorkerArgs} = I)-> 
+                                    case proplists:get_value(Name,PoolConf) of
+                                        undefined -> I;
+                                        Conf -> 
+                                            M = maps:from_list(Args),
+                                            M2 = lists:foldl(fun({Key,Value},Acc)->
+                                                                     maps:puts(Key,Value,Acc)
+                                                             end,M,Conf),
+                                            NewArgs = maps:to_list(M2),
+                                            {Name,NewArgs,WorkerArgs}
+                                    end
+                            end,default_woker_pool()),
     lists:map(fun({Name, Args, WorkerArgs}) ->
                       PoolArgs = [{name, {local, Name}}] ++ Args,
                       poolboy:child_spec(Name, PoolArgs, WorkerArgs)
