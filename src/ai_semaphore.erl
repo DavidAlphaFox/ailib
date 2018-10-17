@@ -37,21 +37,21 @@
 -spec create(Count :: integer())-> {ok,pid()}.
 create(Count)->
 	Opts = [{avalible,Count}],
-	ai_semaphore_sup:start_semaphore(Opts).
+	ai_semaphore_sup:start_server(Opts).
 -spec create(Name :: atom(),Count :: integer())-> {ok,pid()}.
 create(Name,Count)->
-    Opts = [{avalible,Count},{name,semaphore_new(Name)}],
-    ai_semaphore_sup:start_semaphore(Opts).
+    Opts = [{avalible,Count},{name,server_name_new(Name)}],
+    ai_semaphore_sup:start_server(Opts).
 -spec destroy(Semaphore :: atom()|pid()) -> ok.
 destroy(Semaphore) when is_pid(Semaphore)->
     gen_server:cast(Semaphore,destroy);
 destroy(Semaphore) ->
-    gen_server:cast(semaphore_name(Semaphore),destroy).
+    gen_server:cast(server_name(Semaphore),destroy).
 -spec wait(Semaphore :: pid()| atom()) -> ok.
 wait(Semaphore) when erlang:is_pid(Semaphore)->
     do_wait(Semaphore);
 wait(Semaphore) ->
-    do_wait(semaphore_name(Semaphore)).
+    do_wait(server_name(Semaphore)).
 -spec do_wait(Semaphore :: pid()| atom()) -> ok.
 do_wait(Semaphore)->
     Caller = self(),
@@ -61,7 +61,7 @@ do_wait(Semaphore)->
 release(Semaphore) when erlang:is_pid(Semaphore)->
     do_release(Semaphore);
 release(Semaphore) ->
-    do_release(semaphore_name(Semaphore)).
+    do_release(server_name(Semaphore)).
 -spec do_release(Semaphore :: atom() | pid()) -> ok.
 do_release(Semaphore)->
 	Caller = self(),
@@ -292,9 +292,9 @@ notify_waiter({Caller,From},Q2,#state{monitors = M } = State) ->
             demonitor_process(MRef),
             notify_waiters(Q2,State#state{waiters = Q2,monitors = maps:remove(Caller,M)})
     end.
-semaphore_new(Name)->
+server_name_new(Name)->
     Lname = erlang:atom_to_list(Name) ++ "_semaphore_server",
     erlang:list_to_atom(Lname).
-semaphore_name(Name)->
+server_name(Name)->
     Lname = erlang:atom_to_list(Name) ++ "_semaphore_server",
     erlang:list_to_existing_atom(Lname).

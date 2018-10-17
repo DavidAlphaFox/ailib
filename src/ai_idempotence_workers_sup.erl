@@ -70,17 +70,17 @@ default_woker_pool()->
         [{size,10},{worker_module,ai_idempotence_task_worker},{strategy,fifo}],[]}
       ].
 worker_pool_specs()->
-    {ok, PoolConf} = application:get_env(ailib, ai_idempotence_poolboy),
-    MergedPools = lists:map(fun({Name,Args,WorkerArgs} = I)-> 
+    {ok, PoolConf} = application:get_env(ailib, ai_idempotence_poolboy,[]),
+    MergedPools = lists:map(fun({Name,Args,_WorkerArgs} = I)-> 
                                     case proplists:get_value(Name,PoolConf) of
                                         undefined -> I;
-                                        Conf -> 
+                                        {ConfArgs,ConfWorkArgs} -> 
                                             M = maps:from_list(Args),
                                             M2 = lists:foldl(fun({Key,Value},Acc)->
                                                                      maps:puts(Key,Value,Acc)
-                                                             end,M,Conf),
+                                                             end,M,ConfArgs),
                                             NewArgs = maps:to_list(M2),
-                                            {Name,NewArgs,WorkerArgs}
+                                            {Name,NewArgs,ConfWorkArgs}
                                     end
                             end,default_woker_pool()),
     lists:map(fun({Name, Args, WorkerArgs}) ->

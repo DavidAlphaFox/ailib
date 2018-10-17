@@ -15,14 +15,14 @@
 
 %% Supervisor callbacks
 -export([init/1]).
--export([start_pool/1]).
+-export([start_server/1]).
 
 -define(SERVER, ?MODULE).
 
 %%%===================================================================
 %%% API functions
 %%%===================================================================
-start_pool(Opts)->
+start_server(Opts)->
     supervisor:start_child(?SERVER,[Opts]).
 %%--------------------------------------------------------------------
 %% @doc
@@ -59,13 +59,13 @@ init([]) ->
                  intensity => 1,
                  period => 5},
 
-    Semaphore = #{id => ai_idempotence_pool,
+    IdempotencePool = #{id => ai_idempotence_pool,
                start => {ai_idempotence_pool, start_link, []},
                restart => permanent,
                shutdown => 5000,
                type => worker,
                modules => [ai_idempotence_pool]},
-    {ok, {SupFlags, [Semaphore]}}.
+    {ok, {SupFlags, [IdempotencePool]}}.
 
 %%%===================================================================
 %%% Internal functions

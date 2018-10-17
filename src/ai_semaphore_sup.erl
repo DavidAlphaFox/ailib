@@ -15,14 +15,14 @@
 
 %% Supervisor callbacks
 -export([init/1]).
--export([start_semaphore/1]).
+-export([start_server/1]).
 
 -define(SERVER, ?MODULE).
 
 %%%===================================================================
 %%% API functions
 %%%===================================================================
-start_semaphore(Opts)->
+start_server(Opts)->
     supervisor:start_child(?SERVER,[Opts]).
 %%--------------------------------------------------------------------
 %% @doc

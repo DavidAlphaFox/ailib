@@ -21,10 +21,13 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3, format_status/2]).
 
+-export([named_pool/1,named_pool/3,named_pool/4]).
+-export([unnamed_pool/0,unnamed_pool/2,unnamed_pool/3]).
+
 -export([task_add/3,task_finish/3]).
 
 -define(SERVER, ?MODULE).
-
+-define(POOL_SIZE,10).
 -record(state, {
                 tasks :: maps:maps(),
                 running :: list(),
@@ -39,26 +42,68 @@
 %%%===================================================================
 %%% API
 %%%===================================================================
--spec task_add(Pool :: pid(),Key :: binary()|atom(),Ctx :: term()) -> {done,term()} | {error,term(),term()}.
+-spec unnamed_pool()-> {ok,pid()}.
+unnamed_pool()->
+    unnamed_pool(idempotence_task_notify_pool,idempotence_task_running_pool,?POOL_SIZE).
+-spec unnamed_pool(NotifyPool :: atom(), RunningPool :: atom()) -> {ok,pid()}.
+unnamed_pool(NotifyPool,RunningPool)->
+    unnamed_pool(NotifyPool,RunningPool,?POOL_SIZE).
+-spec unnamed_pool(NotifyPool :: atom(), RunningPool :: atom(),MaxConcurrent :: integer()) -> {ok,pid()}.
+unnamed_pool(NotifyPool,RunningPool,MaxConcurrent)->
+    Opts = [{notify_pool,NotifyPool},{running_pool,RunningPool},{max_concurrent,MaxConcurrent}],
+    ai_idempotence_pool_sup:start_server(Opts).
+-spec named_pool(Name :: atom())-> {ok,pid()}.
+named_pool(Name)->
+    named_pool(Name,idempotence_task_notify_pool,idempotence_task_running_pool,?POOL_SIZE).
+
+-spec named_pool(Name :: atom(),NotifyPool :: atom(), RunningPool :: atom()) -> {ok,pid()}.
+named_pool(Name,NotifyPool,RunningPool)->               
+    named_pool(Name,NotifyPool,RunningPool,?POOL_SIZE).
+
+-spec named_pool(Name :: atom(),NotifyPool :: atom(), RunningPool :: atom(),MaxConcurrent :: integer()) -> {ok,pid()}.
+named_pool(Name,NotifyPool,RunningPool,MaxConcurrent)->
+    Opts = [{name,server_name_new(Name)},{notify_pool,NotifyPool},{running_pool,RunningPool},{max_concurrent,MaxConcurrent}],
+    ai_idempotence_pool_sup:start_server(Opts).
+-spec task_add(Pool :: pid() | atom(),Key :: binary()|atom(),Ctx :: term()) -> {done,term()} | {error,term(),term()}.
 task_add(Pool,Key,Ctx)->
     Caller = self(),
     gen_server:call(Pool,{task_add,Key,Ctx,Caller},infinity).
--spec task_finish(Pool :: pid(), Key :: binary() | atom(),
+
+-spec task_finish(Pool :: pid() | atom(), Key :: binary() | atom(),
                   Result :: {done,term()} | {error,term(),term()}) -> ok.
-task_finish(Pool,Key,Result)->
+task_finish(Pool,Key,Result) when erlang:is_pid(Pool)->
+    do_task_finish(Pool,Key,Result);
+task_finish(Pool,Key,Result) ->
+    do_task_finish(server_name(Pool),Key,Result).
+-spec do_task_finish(Pool :: pid() | atom(), Key :: binary() | atom(),
+                  Result :: {done,term()} | {error,term(),term()}) -> ok.
+do_task_finish(Pool,Key,Result)->
     gen_server:cast(Pool,{task_finish,Key,Result}).
 %%--------------------------------------------------------------------
 %% @doc
 %% Starts the server
 %% @end
 %%--------------------------------------------------------------------
--spec start_link(Opts :: proplists:proplists()) -> {ok, Pid :: pid()} |
-                      {error, Error :: {already_started, pid()}} |
-                      {error, Error :: term()} |
-                      ignore.
-start_link(Opts) ->
-    gen_server:start_link(?MODULE, Opts, []).
 
+-spec start_link(Opts :: proplists:proplists()) -> {ok, Pid :: pid()} |
+                                                   {error, Error :: {already_started, pid()}} |
+                                                   {error, Error :: term()} |
+                                                   ignore.
+start_link(Opts) ->
+    Name = proplists:get_value(name,Opts),
+    case Name of
+        undefined ->
+            gen_server:start_link(?MODULE, Opts, []);
+        _ ->
+            start_link(Name,proplists:delete(name, Opts))
+    end.
+
+-spec start_link(Name :: atom(),Opts :: proplists:proplists()) -> {ok, Pid :: pid()} |
+                                                                  {error, Error :: {already_started, pid()}} |
+                                                                  {error, Error :: term()} |
+                                                                  ignore.
+start_link(Name,Opts) ->
+    gen_server:start_link({local,Name}, ?MODULE, Opts, []).
 %%%===================================================================
 %%% gen_server callbacks
 %%%===================================================================
@@ -241,3 +286,10 @@ try_finish_task(Key,#state{tasks = T,running = R,waitting = W, current_running =
              }
     end.
     
+server_name_new(Name)->
+    Lname = erlang:atom_to_list(Name) ++ "_idempotence_pool",
+    erlang:list_to_atom(Lname).
+server_name(Name)->
+    Lname = erlang:atom_to_list(Name) ++ "_idempotence_pool",
+    erlang:list_to_existing_atom(Lname).
+
