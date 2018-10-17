@@ -4,9 +4,9 @@
 %%% @doc
 %%%
 %%% @end
-%%% Created : 16 Oct 2018 by David Gao <david@laptop-02.local>
+%%% Created : 15 Oct 2018 by David Gao <david@laptop-02.local>
 %%%-------------------------------------------------------------------
--module(ai_idempotence_sup).
+-module(ai_idempotence_pool_sup).
 
 -behaviour(supervisor).
 
@@ -15,13 +15,15 @@
 
 %% Supervisor callbacks
 -export([init/1]).
+-export([start_pool/1]).
 
 -define(SERVER, ?MODULE).
 
 %%%===================================================================
 %%% API functions
 %%%===================================================================
-
+start_pool(Opts)->
+    supervisor:start_child(?SERVER,[Opts]).
 %%--------------------------------------------------------------------
 %% @doc
 %% Starts the supervisor
@@ -53,26 +55,18 @@ start_link() ->
                         [ChildSpec :: supervisor:child_spec()]}} |
                   ignore.
 init([]) ->
-
-    SupFlags = #{strategy => one_for_one,
+    SupFlags = #{strategy => simple_one_for_one,
                  intensity => 1,
                  period => 5},
-    IdempotenceWokersSup = #{id => ai_idempotence_workers_sup,
-                             start => {ai_idempotence_workers_sup, start_link, []},
-                             restart => transient,
-                             shutdown => 5000,
-                             type => supervisor,
-                             modules => [ai_idempotence_workers_sup]},
-    IdempotencePoolSup = #{id => ai_idempotence_pool_sup,
-                           start => {ai_idempotence_pool_sup, start_link, []},
-                           restart => transient,
-                           shutdown => 5000,
-                           type => supervisor,
-                           modules => [ai_idempotence_pool_sup]},
 
-    {ok, {SupFlags, [IdempotenceWokersSup,IdempotencePoolSup]}}.
+    Semaphore = #{id => ai_idempotence_pool,
+               start => {ai_idempotence_pool, start_link, []},
+               restart => permanent,
+               shutdown => 5000,
+               type => worker,
+               modules => [ai_idempotence_pool]},
+    {ok, {SupFlags, [Semaphore]}}.
 
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-
