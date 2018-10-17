@@ -293,7 +293,7 @@ try_finish_task(Key,#state{tasks = T,running = R,waitting = W, current_running =
         {{value,NextTask},W2} ->
             NewState = State#state{
                          tasks = maps:remove(Key,T),
-                         running = queue:filter(fun(I) -> I /= Key end,R),
+                         running = lists:filter(fun(I) -> I /= Key end,R),
                          waitting = W2,
                          current_running = CurrentRunning -1
                         },
