@@ -73,18 +73,18 @@ init([]) ->
 default_woker_pool()->
     maps:from_list(
       [
-       {idempotence_task_notify_pool, {idempotence_task_notify_pool,40,[]}},
-       {idempotence_task_running_pool, {idempotence_task_running_pool,10,[]}}
+       {idempotence_task_notify_pool, {idempotence_task_notify_pool,
+                                       [{size,40},{worker_module,ai_idempotence_notify_worker}],[]}},
+       {idempotence_task_running_pool, {idempotence_task_running_pool,
+                                        [{size,10},{worker_module,ai_idempotence_task_worker},{strategy,fifo}],[]}}
       ]).
 worker_pool_specs()->
     {ok, Pools} = application:get_env(ailib, idempotence_poolboy),
-    PoolMaps = maps:from_list(
-                 lists:map(fun({Name,SizeArgs,WorkerArgs} = Item)-> 
-                                      {Name,Item}
-                              end,Pools)
-                ).
-    PoolSpecs = lists:map(fun({Name, SizeArgs, WorkerArgs}) ->
-                                  PoolArgs = [{name, {local, Name}},
-                                              {worker_module, example_worker}] ++ SizeArgs,
-                                  poolboy:child_spec(Name, PoolArgs, WorkerArgs)
-                          end, Pools),
+    PoolMaps = lists:foldl(fun({Name,Args,WorkerArgs},Acc)->
+                                   maps:put(Name,{Name,Args,WorkerArgs},Acc)
+                           end,default_woker_pool(),Pools),
+    MergedPools = maps:values(PoolMaps),
+    lists:map(fun({Name, Args, WorkerArgs}) ->
+                      PoolArgs = [{name, {local, Name}}] ++ Args,
+                      poolboy:child_spec(Name, PoolArgs, WorkerArgs)
+              end, MergedPools).
