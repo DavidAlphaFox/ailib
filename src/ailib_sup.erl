@@ -17,4 +17,10 @@ init([]) ->
                  shutdown => 5000,
                  type => supervisor,
                  modules => [ai_semaphore_sup]},
-	{ok, {SupFlags,[SemaphoreSup]}}.
+    IdempotenceSup = #{id => ai_idempotence_sup,
+										 start => {ai_idempotence_sup, start_link, []},
+										 restart => transient,
+										 shutdown => 5000,
+										 type => supervisor,
+										 modules => [ai_idempotence_sup]},
+	{ok, {SupFlags,[SemaphoreSup,IdempotenceSup]}}.
