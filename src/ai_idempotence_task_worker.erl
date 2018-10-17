@@ -90,9 +90,8 @@ handle_call(_Request, _From, State) ->
 	{noreply, NewState :: term(), hibernate} |
 	{stop, Reason :: term(), NewState :: term()}.
 handle_cast({task,Key,Ctx,Caller}, State)->
-    {M,F,A} = Ctx,
 		try
-			Result = erlang:apply(M,F,A),
+        Result = task_run(Ctx),
 			ai_idempotence_pool:task_finish(Caller,Key,{done,Result})
 		catch
 			Error:Reason ->
@@ -159,3 +158,6 @@ format_status(_Opt, Status) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+task_run({M,F,A}) -> erlang:apply(M,F,A);
+task_run({F,A}) -> erlang:apply(F,A).
+    

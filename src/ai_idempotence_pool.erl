@@ -24,14 +24,14 @@
 -export([named_pool/1,named_pool/3,named_pool/4]).
 -export([unnamed_pool/0,unnamed_pool/2,unnamed_pool/3]).
 
--export([task_add/3,task_finish/3]).
+-export([task_add/2,task_add/3,task_finish/3]).
 
 -define(SERVER, ?MODULE).
 -define(POOL_SIZE,10).
 -record(state, {
                 tasks :: maps:maps(),
                 running :: list(),
-                waitting :: list(),
+                waitting :: queue:queue(),
                 observers :: maps:maps(),
                 notify_pool :: atom(),
                 running_pool :: atom(),
@@ -64,8 +64,19 @@ named_pool(Name,NotifyPool,RunningPool)->
 named_pool(Name,NotifyPool,RunningPool,MaxConcurrent)->
     Opts = [{name,server_name_new(Name)},{notify_pool,NotifyPool},{running_pool,RunningPool},{max_concurrent,MaxConcurrent}],
     ai_idempotence_pool_sup:start_server(Opts).
+
+-spec task_add(Pool :: pid() | atom(),Ctx :: term()) -> {done,term()} | {error,term(),term()}.
+task_add(Pool,Ctx)->
+    Key = erlang:phash2(Ctx),
+    task_add(Pool,Key,Ctx).
+
 -spec task_add(Pool :: pid() | atom(),Key :: binary()|atom(),Ctx :: term()) -> {done,term()} | {error,term(),term()}.
-task_add(Pool,Key,Ctx)->
+task_add(Pool,Key,Ctx) when erlang:is_pid(Pool)->
+    do_task_add(Pool,Key,Ctx);
+task_add(Pool,Key,Ctx) ->
+    do_task_add(server_name(Pool),Key,Ctx).    
+-spec do_task_add(Pool :: pid() | atom(),Key :: binary()|atom(),Ctx :: term()) -> {done,term()} | {error,term(),term()}.
+do_task_add(Pool,Key,Ctx)->
     Caller = self(),
     gen_server:call(Pool,{task_add,Key,Ctx,Caller},infinity).
 
@@ -124,7 +135,7 @@ init(Opts) ->
     RunningPool = proplists:get_value(running_pool,Opts),
     MaxConcurrent = proplists:get_value(max_concurrent,Opts,10),
     {ok, #state{ tasks = maps:new(),
-                 observers = maps:new(),running = [],waitting = [],
+                 observers = maps:new(),running = [],waitting = queue:new(),
                  notify_pool = NotifyPool,running_pool = RunningPool,
                  max_concurrent = MaxConcurrent,current_running = 0
            }}.
@@ -246,17 +257,26 @@ observer_add(Key,Caller,From,#state{observers = O} = State)->
      }.
 
 try_schedule_task(Key,#state{waitting = W, max_concurrent = MaxRunning,current_running = MaxRunning } = State)->
-    State#state{ waitting = queue:in(Key,W)};
+    case queue:member(Key,W) of
+        true -> State;
+        _ ->
+            State#state{ waitting = queue:in(Key,W)}
+    end;
+
 try_schedule_task(Key,#state{tasks = T, running = R, current_running = CurrentRunning} = State) ->
-    Ctx = maps:get(Key,T),
-    RunningPool = running_pool(State),
-    poolboy:transaction(RunningPool, fun(Worker) ->
-                                             ai_idempotence_task_worker:task_run(Worker,Key,Ctx)
-                                     end),
-    State#state{
-      running = queue:in(Key,R),
-      current_running = CurrentRunning  + 1
-     }.
+    case lists:member(Key,R) of
+        true -> State;
+        _->
+            Ctx = maps:get(Key,T),
+            RunningPool = running_pool(State),
+            poolboy:transaction(RunningPool, fun(Worker) ->
+                                                     ai_idempotence_task_worker:task_run(Worker,Key,Ctx)
+                                             end),
+            State#state{
+              running = [Key|R],
+              current_running = CurrentRunning  + 1
+             }
+    end.
 
 try_wakeup_observers(Key,Result,#state{observers = O} = State)->
     Items = maps:get(Key,O,[]),
@@ -281,7 +301,7 @@ try_finish_task(Key,#state{tasks = T,running = R,waitting = W, current_running =
         _ ->
             State#state{
               tasks = maps:remove(Key,T),
-              running = queue:filter(fun(I) -> I /= Key end,R),
+              running = lists:filter(fun(I) -> I /= Key end,R),
               current_running = CurrentRunning -1
              }
     end.
