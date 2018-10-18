@@ -39,7 +39,7 @@ init_mnesia()->
   mnesia:wait_for_tables(mnesia:system_info(local_tables),infinity).
 
 init_table(SchemaCreated,TableCreateFun)->
-	case aborted_on_error(SchemaCreated) of
+	case SchemaCreated of
 		{atomic,ok}-> aborted_on_error((catch TableCreateFun()));
 		Res -> Res
 	end.
