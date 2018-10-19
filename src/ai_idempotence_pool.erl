@@ -24,7 +24,7 @@
 -export([named_pool/1,named_pool/3,named_pool/4]).
 -export([unnamed_pool/0,unnamed_pool/2,unnamed_pool/3]).
 
--export([task_add/2,task_add/3,task_finish/3]).
+-export([task_add/3,task_finish/3]).
 
 -define(SERVER, ?MODULE).
 -define(POOL_SIZE,10).
@@ -66,10 +66,6 @@ named_pool(Name,NotifyPool,RunningPool,MaxConcurrent)->
     Opts = [{name,server_name_new(Name)},{notify_pool,NotifyPool},{running_pool,RunningPool},{max_concurrent,MaxConcurrent}],
     ai_idempotence_pool_sup:start_server(Opts).
 
--spec task_add(Pool :: pid() | atom(),Ctx :: term()) -> {done,term()} | {error,term(),term()}.
-task_add(Pool,Ctx)->
-    Key = erlang:phash2(Ctx),
-    task_add(Pool,Key,Ctx).
 
 -spec task_add(Pool :: pid() | atom(),Key :: binary()|atom(),Ctx :: term()) -> {done,term()} | {error,term(),term()}.
 task_add(Pool,Key,Ctx) when erlang:is_pid(Pool)->
