@@ -334,7 +334,7 @@ task_done(Key,Worker,Moniters)->
 		
 try_finish_task(Key,#state{tasks = T,running = R,waitting = W, current_running =
     CurrentRunning,monitors = M} = State)->
-		Worker = proplists:get(Key,R),
+		Worker = proplists:get_value(Key,R),
     case queue:out(W) of
         {{value,NextTask},W2} ->
             NewState = State#state{
