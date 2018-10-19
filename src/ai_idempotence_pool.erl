@@ -265,12 +265,12 @@ task_running(Task,Tasks)-> lists:any(fun({T,_Worker})-> Task == T end,Tasks).
 schedule_task(Key,#state{waitting = W, max_concurrent = MaxRunning,current_running = MaxRunning } = State)->
 	case queue:member(Key,W) of
 				true -> State;
-      	_ -> State#state{ waitting = queue:in(Key,W)}
+      	false -> State#state{ waitting = queue:in(Key,W)}
   end;
 schedule_task(Key,#state{tasks = T, running = R, current_running = CurrentRunning,monitors = M} = State) ->
     case task_running(Key,R) of
         true -> State;
-        _->
+        false->
             Ctx = maps:get(Key,T),
             RunningPool = running_pool(State),
             RunningFun = fun(Worker) ->
@@ -307,10 +307,10 @@ reschedule_tasks(Tasks,#state{running = R, current_running = CurrentRunning} = S
         0 -> State;
         N ->
             lists:foldl(fun(Task,Acc)->
-                                try_schedule_task(Task,Acc)
+                                schedule_task(Task,Acc)
                         end,
                         State#state{
-                          running = queue:filter(fun(I) -> not lists:member(I) end,R),
+                          running = queue:filter(fun({I,_Worker}) -> not lists:member(I,ReSchedule) end,R),
                           current_running = CurrentRunning - N})
     end.
             
