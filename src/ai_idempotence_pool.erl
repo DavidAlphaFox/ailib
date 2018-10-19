@@ -200,7 +200,7 @@ handle_info({'DOWN',MonitorReference, process, Pid,_Reason},#state{monitors = M}
     {MonitorReference,Tasks} = maps:get(Pid,M),
     demonitor_process(MonitorReference),
     gen_server:cast(self(),{reschedule_tasks,Tasks}),
-    {noreply,State};
+    {noreply,State#state{monitors = maps:remove(Pid,M)}};
 handle_info(_Info, State) ->
     {noreply, State}.
 
