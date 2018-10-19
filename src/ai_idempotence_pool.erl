@@ -100,10 +100,8 @@ do_task_finish(Pool,Key,Result)->
 start_link(Opts) ->
     Name = proplists:get_value(name,Opts),
     case Name of
-        undefined ->
-            gen_server:start_link(?MODULE, Opts, []);
-        _ ->
-            start_link(Name,proplists:delete(name, Opts))
+        undefined -> gen_server:start_link(?MODULE, Opts, []);
+        _ -> start_link(Name,proplists:delete(name, Opts))
     end.
 
 -spec start_link(Name :: atom(),Opts :: proplists:proplists()) -> {ok, Pid :: pid()} |
@@ -153,8 +151,7 @@ init(Opts) ->
                          {stop, Reason :: term(), Reply :: term(), NewState :: term()} |
                          {stop, Reason :: term(), NewState :: term()}.
 handle_call({task_add,Key,Ctx,Caller},From,State)->
-    NewState0 = task_add(Key,Ctx,Caller,From, State),
-    NewState = try_schedule_task(Key,NewState0),
+    NewState = add_task(Key,Ctx,Caller,From, State),
     {noreply,NewState};
 handle_call(_Request, _From, State) ->
     Reply = ok,
@@ -172,8 +169,8 @@ handle_call(_Request, _From, State) ->
                          {noreply, NewState :: term(), hibernate} |
                          {stop, Reason :: term(), NewState :: term()}.
 handle_cast({task_finish,Key,Result},State)->
-    NewState0 = try_wakeup_observers(Key,Result,State),
-    NewState = try_finish_task(Key,NewState0),
+    NewState0 = wakeup_observers(Key,Result,State),
+    NewState = finish_task(Key,NewState0),
     {noreply,NewState};
 handle_cast({reschedule_tasks,Tasks},State)->
     NewState = reschedule_tasks(Tasks,State),
@@ -250,14 +247,14 @@ running_pool(#state{running_pool = Name}) -> Name.
 notify_pool(#state{notify_pool = undefined}) -> idempotence_task_notify_pool;
 notify_pool(#state{notify_pool = Name}) ->  Name.
 
-task_add(Key,Ctx,Caller,From,#state{tasks = T} =  State)->    
-    case maps:is_key(Key,T) of
-        true ->
-            observer_add(Key,Caller,From,State);
-        _ ->
-            observer_add(Key,Caller,From,State#state{tasks = maps:put(Key,Ctx,T)})
+add_task(Key,Ctx,Caller,From,#state{tasks = T} =  State)->    
+    case maps:is_key(Key,T) of %% I'm already a task
+        true -> add_observer(Key,Caller,From,State);
+        _ -> 
+						NewState = add_observer(Key,Caller,From,State#state{tasks = maps:put(Key,Ctx,T)}),
+						schedule_task(Key,NewState)
     end.
-observer_add(Key,Caller,From,#state{observers = O} = State)->
+add_observer(Key,Caller,From,#state{observers = O} = State)->
     Items = maps:get(Key,O,[]),
     State#state{
       observers = maps:put(Key,[{Caller,From}|Items],O)
@@ -265,12 +262,12 @@ observer_add(Key,Caller,From,#state{observers = O} = State)->
 
 task_running(Task,Tasks)-> lists:any(fun({T,_Worker})-> Task == T end,Tasks).
 
-try_schedule_task(Key,#state{waitting = W, max_concurrent = MaxRunning,current_running = MaxRunning } = State)->
+schedule_task(Key,#state{waitting = W, max_concurrent = MaxRunning,current_running = MaxRunning } = State)->
 	case queue:member(Key,W) of
 				true -> State;
       	_ -> State#state{ waitting = queue:in(Key,W)}
   end;
-try_schedule_task(Key,#state{tasks = T, running = R, current_running = CurrentRunning,monitors = M} = State) ->
+schedule_task(Key,#state{tasks = T, running = R, current_running = CurrentRunning,monitors = M} = State) ->
     case task_running(Key,R) of
         true -> State;
         _->
@@ -283,8 +280,8 @@ try_schedule_task(Key,#state{tasks = T, running = R, current_running = CurrentRu
                                               undefined ->
                                                   Ref = erlang:monitor(process,Worker),
                                                   maps:put(Worker,{Ref,[Key]},M);
-                                              {Ref,Tasks}->
-                                                  maps:put(Worker,{Ref,[Key|Tasks]},M)
+                                              {Ref,Running}->
+                                                  maps:put(Worker,{Ref,[Key|Running]},M)
                                           end,
                                      State#state{
                                        running = [{Key,Worker}|R],
@@ -318,7 +315,7 @@ reschedule_tasks(Tasks,#state{running = R, current_running = CurrentRunning} = S
     end.
             
 
-try_wakeup_observers(Key,Result,#state{observers = O} = State)->
+wakeup_observers(Key,Result,#state{observers = O} = State)->
     Items = maps:get(Key,O,[]),
     NotifyPool = notify_pool(State),
     poolboy:transaction(NotifyPool,fun(Worker)->
@@ -332,7 +329,7 @@ task_done(Key,Worker,Moniters)->
 		NewTasks = lists:filter(fun(I) -> I /= Key end,Tasks),
 		maps:put(Worker,{Ref,NewTasks},Moniters).
 		
-try_finish_task(Key,#state{tasks = T,running = R,waitting = W, current_running =
+finish_task(Key,#state{tasks = T,running = R,waitting = W, current_running =
     CurrentRunning,monitors = M} = State)->
 		Worker = proplists:get_value(Key,R),
     case queue:out(W) of
@@ -344,7 +341,7 @@ try_finish_task(Key,#state{tasks = T,running = R,waitting = W, current_running =
                          current_running = CurrentRunning -1,
 												 monitors = task_done(Key,Worker,M)
                         },
-            try_schedule_task(NextTask,NewState);
+            schedule_task(NextTask,NewState);
         _ ->
 
             State#state{
