@@ -262,15 +262,15 @@ add_observer(Key,Caller,From,#state{observers = O} = State)->
 
 task_running(Task,Tasks)-> lists:any(fun({T,_Worker})-> Task == T end,Tasks).
 
-schedule_task(Key,#state{waitting = W, max_concurrent = MaxRunning,current_running = MaxRunning } = State)->
-	case queue:member(Key,W) of
-				true -> State;
-      	false -> State#state{ waitting = queue:in(Key,W)}
+schedule_task(Key,#state{waitting = W,running = R, max_concurrent = MaxRunning,current_running = MaxRunning } = State)->
+	case {queue:member(Key,W),task_running(Key,R)} of
+			{false,false} -> State#state{ waitting = queue:in(Key,W)};
+			_ -> State
   end;
 schedule_task(Key,#state{tasks = T, running = R, current_running = CurrentRunning,monitors = M} = State) ->
     case task_running(Key,R) of
         true -> State;
-        false->
+        false ->
             Ctx = maps:get(Key,T),
             RunningPool = running_pool(State),
             RunningFun = fun(Worker) ->
