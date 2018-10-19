@@ -264,11 +264,14 @@ observer_add(Key,Caller,From,#state{observers = O} = State)->
      }.
 
 try_schedule_task(Key,#state{waitting = W, max_concurrent = MaxRunning,current_running = MaxRunning } = State)->
-    case queue:member(Key,W) of
-        true -> State;
-        _ ->
-            State#state{ waitting = queue:in(Key,W)}
-    end;
+	case queue:member(Key,W) of
+				true -> State;
+      	_ ->
+					case queue:member(Key,W) of
+						true -> State;
+						_ -> State#state{ waitting = queue:in(Key,W)}
+					end
+  end;
 
 try_schedule_task(Key,#state{tasks = T, running = R, current_running = CurrentRunning,monitors = M} = State) ->
     case lists:member(Key,R) of
