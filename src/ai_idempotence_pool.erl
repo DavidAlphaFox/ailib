@@ -263,18 +263,15 @@ observer_add(Key,Caller,From,#state{observers = O} = State)->
       observers = maps:put(Key,[{Caller,From}|Items],O)
      }.
 
+task_running(Task,Tasks)-> lists:any(fun({T,_Worker})-> Task == T end,Tasks).
+
 try_schedule_task(Key,#state{waitting = W, max_concurrent = MaxRunning,current_running = MaxRunning } = State)->
 	case queue:member(Key,W) of
 				true -> State;
-      	_ ->
-					case queue:member(Key,W) of
-						true -> State;
-						_ -> State#state{ waitting = queue:in(Key,W)}
-					end
+      	_ -> State#state{ waitting = queue:in(Key,W)}
   end;
-
 try_schedule_task(Key,#state{tasks = T, running = R, current_running = CurrentRunning,monitors = M} = State) ->
-    case lists:member(Key,R) of
+    case task_running(Key,R) of
         true -> State;
         _->
             Ctx = maps:get(Key,T),
@@ -290,7 +287,7 @@ try_schedule_task(Key,#state{tasks = T, running = R, current_running = CurrentRu
                                                   maps:put(Worker,{Ref,[Key|Tasks]},M)
                                           end,
                                      State#state{
-                                       running = [Key|R],
+                                       running = [{Key,Worker}|R],
                                        current_running = CurrentRunning + 1,
                                        monitors = NM
                                       }
@@ -330,23 +327,32 @@ try_wakeup_observers(Key,Result,#state{observers = O} = State)->
     State#state{
       observers = maps:remove(Key,O)
      }.
-
-try_finish_task(Key,#state{tasks = T,running = R,waitting = W, current_running = CurrentRunning} = State)->
+task_done(Key,Worker,Moniters)->
+		{Ref,Tasks} = maps:get(Worker,Moniters),
+		NewTasks = lists:filter(fun(I) -> I /= Key end,Tasks),
+		maps:put(Worker,{Ref,NewTasks},Moniters).
+		
+try_finish_task(Key,#state{tasks = T,running = R,waitting = W, current_running =
+    CurrentRunning,monitors = M} = State)->
+		Worker = proplists:get(Key,R),
     case queue:out(W) of
         {{value,NextTask},W2} ->
             NewState = State#state{
                          tasks = maps:remove(Key,T),
-                         running = lists:filter(fun(I) -> I /= Key end,R),
+                         running = lists:filter(fun({I,_Worker}) -> I /= Key end,R),
                          waitting = W2,
-                         current_running = CurrentRunning -1
+                         current_running = CurrentRunning -1,
+												 monitors = task_done(Key,Worker,M)
                         },
             try_schedule_task(NextTask,NewState);
         _ ->
+
             State#state{
-              tasks = maps:remove(Key,T),
-              running = lists:filter(fun(I) -> I /= Key end,R),
-              current_running = CurrentRunning -1
-             }
+							tasks = maps:remove(Key,T),
+							running = lists:filter(fun({I,_Worker}) -> I /= Key end,R),
+							current_running = CurrentRunning -1,
+							monitors = task_done(Key,Worker,M)
+            }
     end.
     
 server_name_new(Name)->
