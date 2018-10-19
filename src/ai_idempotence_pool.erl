@@ -36,7 +36,8 @@
                 notify_pool :: atom(),
                 running_pool :: atom(),
                 max_concurrent :: integer(),
-                current_running :: integer()
+                current_running :: integer(),
+                monitors :: maps:maps()
                }).
 
 %%%===================================================================
@@ -137,7 +138,7 @@ init(Opts) ->
     {ok, #state{ tasks = maps:new(),
                  observers = maps:new(),running = [],waitting = queue:new(),
                  notify_pool = NotifyPool,running_pool = RunningPool,
-                 max_concurrent = MaxConcurrent,current_running = 0
+                 max_concurrent = MaxConcurrent,current_running = 0,monitors = maps:new()
            }}.
 
 %%--------------------------------------------------------------------
@@ -178,6 +179,9 @@ handle_cast({task_finish,Key,Result},State)->
     NewState0 = try_wakeup_observers(Key,Result,State),
     NewState = try_finish_task(Key,NewState0),
     {noreply,NewState};
+handle_cast({reschedule_tasks,Tasks},State)->
+    NewState = reschedule_tasks(Tasks,State),
+    {noreply,NewState};
 handle_cast(_Request, State) ->
     {noreply, State}.
 
@@ -192,6 +196,11 @@ handle_cast(_Request, State) ->
                          {noreply, NewState :: term(), Timeout :: timeout()} |
                          {noreply, NewState :: term(), hibernate} |
                          {stop, Reason :: normal | term(), NewState :: term()}.
+handle_info({'DOWN',MonitorReference, process, Pid,_Reason},#state{monitors = M} = State)->
+    {MonitorReference,Tasks} = maps:get(Pid,M),
+    demonitor_process(MonitorReference),
+    gen_server:cast(self(),{reschedule_tasks,Tasks}),
+    {noreply,State};
 handle_info(_Info, State) ->
     {noreply, State}.
 
@@ -238,6 +247,8 @@ format_status(_Opt, Status) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+demonitor_process(undefined) -> true;
+demonitor_process(MRef) -> erlang:demonitor(MRef).
 running_pool(#state{running_pool = undefined})-> idempotence_task_running_pool;
 running_pool(#state{running_pool = Name}) -> Name.
 notify_pool(#state{notify_pool = undefined}) -> idempotence_task_notify_pool;
@@ -263,20 +274,53 @@ try_schedule_task(Key,#state{waitting = W, max_concurrent = MaxRunning,current_r
             State#state{ waitting = queue:in(Key,W)}
     end;
 
-try_schedule_task(Key,#state{tasks = T, running = R, current_running = CurrentRunning} = State) ->
+try_schedule_task(Key,#state{tasks = T, running = R, current_running = CurrentRunning,monitors = M} = State) ->
     case lists:member(Key,R) of
         true -> State;
         _->
             Ctx = maps:get(Key,T),
             RunningPool = running_pool(State),
-            poolboy:transaction(RunningPool, fun(Worker) ->
-                                                     ai_idempotence_task_worker:task_run(Worker,Key,Ctx)
-                                             end),
-            State#state{
-              running = [Key|R],
-              current_running = CurrentRunning  + 1
-             }
+            RunningFun = fun(Worker) ->
+                                 try
+                                     ai_idempotence_task_worker:task_run(Worker,Key,Ctx),
+                                     NM = case maps:get(Worker,M,undefined) of
+                                              undefined ->
+                                                  Ref = erlang:monitor(process,Worker),
+                                                  maps:put(Worker,{Ref,[Key]},M);
+                                              {Ref,Tasks}->
+                                                  maps:put(Worker,{Ref,[Key|Tasks]},M)
+                                          end,
+                                     State#state{
+                                       running = [Key|R],
+                                       current_running = CurrentRunning + 1,
+                                       monitors = NM
+                                      }
+                                 catch
+                                     _Error:_Reason ->
+                                         gen_server:cast(self(),{reschedule_tasks,[Key]}),
+                                         State
+                                 end
+                         end,
+            poolboy:transaction(RunningPool, RunningFun)
     end.
+reschedule_tasks(Tasks,#state{running = R, current_running = CurrentRunning} = State)->
+    ReSchedule = lists:foldl(fun(Task,Acc) ->
+                                     case lists:member(Task,R) of
+                                         true -> [Task|Acc];
+                                         _ -> Acc
+                                     end
+                             end,[],Tasks),
+    case erlang:length(ReSchedule) of
+        0 -> State;
+        N ->
+            lists:foldl(fun(Task,Acc)->
+                                try_schedule_task(Task,Acc)
+                        end,
+                        State#state{
+                          running = queue:filter(fun(I) -> not lists:member(I) end,R),
+                          current_running = CurrentRunning - N})
+    end.
+            
 
 try_wakeup_observers(Key,Result,#state{observers = O} = State)->
     Items = maps:get(Key,O,[]),
