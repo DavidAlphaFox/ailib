@@ -3,7 +3,7 @@
 
 -export([files_in_dir/1]).
 -export([remove_recursive/1,create_dir/1,ensure_in_priv/2]).
--export([open_for_write/1,open_for_read/1]).
+-export([open_for_write/1,open_for_read/1,file_size/1]).
 
 ensure_in_priv(App,Dir)->
 		PrivDir = code:priv_dir(App),
@@ -34,4 +34,17 @@ open_for_read(Filename) ->
         {ok, Fd} -> {ok,Fd};
         Error -> Error
     end.
+file_size(Filename)->
+    case open_for_read(Filename) of
+        {ok,Fd}->
+            case file:position(Fd,eof) of
+                {ok,Size} ->
+                    file:close(Fd),
+                    {ok,Size};
+                Error -> Error
+              end;
+         Error-> Error
+    end.
+    
+                
   
