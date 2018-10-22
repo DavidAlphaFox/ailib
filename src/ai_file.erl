@@ -2,19 +2,20 @@
 -include_lib("kernel/include/file.hrl").
 
 -export([files_in_dir/1]).
--export([remove_recursive/1,create_dir/1,ensure_in_priv/2]).
+-export([remove_recursive/1,create_dir/1,create_priv_dir/2]).
 -export([open_for_write/1,open_for_read/1,file_size/1]).
-
-ensure_in_priv(App,Dir)->
-		PrivDir = code:priv_dir(App),
-		filelib:ensure_dir(filename:join([PrivDir,Dir,"."])).
-
+    
 files_in_dir(Dir) ->
 		{ok, SubFiles} = file:list_dir(Dir),
 		[filename:join(Dir, SubFile) || SubFile <- SubFiles].
 
+create_priv_dir(App,Dir)->
+		PrivDir = code:priv_dir(App),
+		ok = filelib:ensure_dir(filename:join([PrivDir,Dir,"."])),
+    PrivDir.
 create_dir(Path)->
-	filelib:ensure_dir(filename:join([Path, "."])).
+    ok = filelib:ensure_dir(filename:join([Path, "."])),
+    Path.
 
 remove_recursive(Path) ->
 	case filelib:is_dir(Path) of
