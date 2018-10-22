@@ -3,6 +3,7 @@
 
 -export([files_in_dir/1]).
 -export([remove_recursive/1,create_dir/1,ensure_in_priv/2]).
+-export([open_for_write/1,open_for_read/1]).
 
 ensure_in_priv(App,Dir)->
 		PrivDir = code:priv_dir(App),
@@ -22,3 +23,15 @@ remove_recursive(Path) ->
 				lists:foreach(fun remove_recursive/1, files_in_dir(Path)),
 				file:del_dir(Path)
 		end.
+open_for_write(Filename) ->
+	filelib:ensure_dir(Filename),
+  case file:open(Filename, [exclusive, write, binary, raw]) of
+		{ok, Fd} -> {ok,Fd};
+		Error -> Error
+	end.			
+open_for_read(Filename) ->
+    case file:open(Filename, [read, binary, raw]) of
+        {ok, Fd} -> {ok,Fd};
+        Error -> Error
+    end.
+  
