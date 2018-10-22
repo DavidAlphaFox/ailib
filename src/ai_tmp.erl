@@ -18,14 +18,14 @@ run_with_tmp(Name,Options,MFA)->
     case ai_file:create_dir(Dir) of
         ok ->
             try
-                {done,ai_function:run_mfa(MFA,[Dir])}
+                ai_function:run_mfa(MFA,[Dir])
             after
                 case proplists:get_value(clean,Options,false) of
                     true -> ai_file:remove_recursive(Dir);
                     _ -> ok
                 end
             end;
-        E -> {error,E}
+        E -> E
     end.
         
 name(Name)->
