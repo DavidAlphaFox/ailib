@@ -91,7 +91,7 @@ handle_call(_Request, _From, State) ->
 	{stop, Reason :: term(), NewState :: term()}.
 handle_cast({task,Key,Ctx,Caller}, State)->
 		try
-        Result = mfa_run(Ctx),
+        Result = ai_function:run_mfa(Ctx),
         ai_idempotence_pool:task_finish(Caller,Key,{done,Result})
 		catch
 			Error:Reason ->
@@ -158,6 +158,3 @@ format_status(_Opt, Status) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-mfa_run({M,F,A}) -> erlang:apply(M,F,A);
-mfa_run({F,A}) -> erlang:apply(F,A).
-    

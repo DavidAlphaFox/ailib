@@ -18,12 +18,12 @@ run_with_tmp(Name,Options,MFA)->
     case ai_file:create_dir(Dir) of
         ok ->
             try
-                {done,mfa_run(MFA,[Dir])}
+                {done,ai_function:run_mfa(MFA,[Dir])}
             after
-                _ = case proplists:get_value(clean,Options,false) of
-                        true -> ai_file:remove_recursive(Dir);
-                        _ -> ok
-                    end
+                case proplists:get_value(clean,Options,false) of
+                    true -> ai_file:remove_recursive(Dir);
+                    _ -> ok
+                end
             end;
         E -> {error,E}
     end.
@@ -54,10 +54,6 @@ name(Name,Options)->
     TmpName = lists:flatten([Prefix,Name,"-",ai_ascii_random:rand(20),Suffix]),
 		filename:join([Path, TmpName]).
 
-mfa_run({M,F,A},undefined) -> erlang:apply(M,F,A);
-mfa_run({M,F,A},Others) -> erlang:apply(M,F,A ++ Others);
-mfa_run({F,A},undefined) -> erlang:apply(F,A);
-mfa_run({F,A},Others) -> erlang:apply(F,A ++ Others).
 
 
 with_env(Key)->
