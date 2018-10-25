@@ -157,9 +157,15 @@ read(#ai_blob_file{fd = Fd,mode = Mode} = Ref, Size) ->
         write -> {error,not_readable_blob}
     end.
 
-data_range(#ai_blob_file{size = Size})-> {?TOTAL_HEADER_SIZE_BYTES,Size}.
+data_range(#ai_blob_file{size = Size})-> {?TOTAL_HEADER_SIZE_BYTES,Size};
+data_range(Filename) ->
+    case ai_file:file_size(Filename) of 
+        {ok,Size} -> {?TOTAL_HEADER_SIZE_BYTES,Size - ?TOTAL_HEADER_SIZE_BYTES};
+        Error -> Error 
+    end.
 digest(#ai_blob_file{ctx = Digest,mode = Mode}) ->
     case Mode of 
         write -> {error,not_hava_digest};
         _ -> {ok,Digest}
-    end.
+    end;
+digest(_Any) -> {error,not_hava_digest}.

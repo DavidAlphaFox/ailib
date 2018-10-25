@@ -3,7 +3,7 @@
 
 -export([files_in_dir/1,priv_dir/2]).
 -export([remove_recursive/1,create_dir/1,create_priv_dir/2]).
--export([open_for_write/1,open_for_read/1,file_size/1]).
+-export([open_for_write/1,open_for_read/1,open_for_append/1,file_size/1]).
 -export([hash_to_path/2,hash_to_fullname/2]).
 
 
@@ -13,12 +13,12 @@ files_in_dir(Dir) ->
 
 priv_dir(App,Dir)->
     PrivDir = code:priv_dir(App),
-		filename:join([PrivDir,Dir,"."]).
+	filename:join([PrivDir,Dir]).
 
 
 create_priv_dir(App,Dir)->
-		PrivDir = code:priv_dir(App),
-		filelib:ensure_dir(filename:join([PrivDir,Dir,"."])).
+        TheDir = priv_dir(App,Dir),
+		filelib:ensure_dir(filename:join([TheDir,"."])).
 
 create_dir(Path)->
     filelib:ensure_dir(filename:join([Path, "."])).
@@ -30,10 +30,17 @@ remove_recursive(Path) ->
 				lists:foreach(fun remove_recursive/1, files_in_dir(Path)),
 				file:del_dir(Path)
 		end.
+
 open_for_write(Filename) ->
-    filelib:ensure_dir(Filename),
+    filelib:ensure_dir(Filename), %% 每次都是新建，如果存在的时候就报错
     case file:open(Filename, [exclusive, write, binary, raw]) of
 		{ok, Fd} -> {ok,Fd};
+		Error -> Error
+	end.			
+open_for_append(Filename)->
+    filelib:ensure_dir(Filename),
+    case file:open(Filename,[append,binary,raw]) of 
+        {ok, Fd} -> {ok,Fd};
 		Error -> Error
 	end.			
 open_for_read(Filename) ->
@@ -41,16 +48,11 @@ open_for_read(Filename) ->
         {ok, Fd} -> {ok,Fd};
         Error -> Error
     end.
+
 file_size(Filename)->
-    case open_for_read(Filename) of
-        {ok,Fd}->
-            case file:position(Fd,eof) of
-                {ok,Size} ->
-                    file:close(Fd),
-                    {ok,Size};
-                Error -> Error
-              end;
-         Error-> Error
+    case file:read_file_info(Filename) of 
+        {ok, FileInfo} -> {ok,FileInfo#file_info.size};
+        Error -> Error
     end.
 hash_to_path(Level,HashString) when erlang:is_binary(HashString)->
     hash_to_path(Level,erlang:binary_to_list(HashString));
