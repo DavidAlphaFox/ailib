@@ -124,7 +124,7 @@ open_for_read(Filename,CheckConsistency)->
                     file:close(Fd),
                     Error
             end;
-        {flase,{ok,Fd}} ->
+        {false,{ok,Fd}} ->
             case blob_fd(Fd) of 
                 {ok,BlobFd} -> {ok,BlobFd};
                 Error ->
