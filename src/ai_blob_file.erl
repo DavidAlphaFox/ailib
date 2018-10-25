@@ -2,7 +2,7 @@
 
 -export([open_for_write/1,write/2,close/1]).
 -export([open_for_read/1,open_for_read/2,read/2]).
--export([file_data_range/1]).
+-export([file_data_range/1,digest/1]).
 
 -define(MAGIC_NUMBER, <<16#7334:16>>).
 -define(MAGIC_NUMBER_SIZE_BYTES, 2).
@@ -30,7 +30,7 @@ checksum(Fd,Ctx)->
 checksum_consistency(Fd,Ctx,Digest)->
     case checksum(Fd,Ctx) of 
         {ok,Digest} ->
-            {ok,Fd};
+            {ok,Fd,Digest};
         {error,Reason} -> {error,Reason};
         _AnyDigest -> {error,corrupt_blob_file}
     end.
@@ -41,7 +41,7 @@ is_blob_broken(Fd)->
         {ok,Digest} -> 
             {ok, ?TOTAL_HEADER_SIZE_BYTES} = file:position(Fd, {bof, ?TOTAL_HEADER_SIZE_BYTES}),
             checksum_consistency(Fd,crypto:hash_init(sha),Digest);
-        {error,Reason}  -> {error,Reason}
+        Error -> Error
     end.
 
 is_blob_file(Fd)->
@@ -50,14 +50,19 @@ is_blob_file(Fd)->
         {error,Reason}  -> {error,Reason};
         _AnyData -> {error, not_blob_file}
     end.
-
 blob_fd(Fd)->
+    {ok, _Any} = file:position(Fd, {bof, ?MAGIC_NUMBER_SIZE_BYTES + ?VERSION_NUMBER_SIZE_BYTES}),
+    case  file:read(?CHECKSUM_SIZE_BYTES) of 
+        {ok,Digest} -> blob_fd(Fd,Digest);
+        Error -> Error 
+    end.
+blob_fd(Fd,Digest)->
     {ok, _Any} = file:position(Fd, {bof, ?MAGIC_NUMBER_SIZE_BYTES + ?VERSION_NUMBER_SIZE_BYTES + ?CHECKSUM_SIZE_BYTES}),
     case file:read(Fd,?FILESIZE_SIZE_BYTES) of 
         {ok,SizeBinary} ->
             <<Size:64/big-unsigned-integer>> = SizeBinary,
             {ok, ?TOTAL_HEADER_SIZE_BYTES} = file:position(Fd, {bof, ?TOTAL_HEADER_SIZE_BYTES}),
-            {ok,#ai_blob_file{fd = Fd,size = Size,mode = read}};
+            {ok,#ai_blob_file{fd = Fd,size = Size,ctx = Digest, mode = read}};
         Error -> Error 
     end.
 
@@ -65,7 +70,7 @@ blob_check(Fd)->
     case is_blob_file(Fd) of 
         {ok,Fd} -> 
             case is_blob_broken(Fd) of 
-                {ok,Fd} -> blob_fd(Fd);
+                {ok,Fd,Digest} -> blob_fd(Fd,Digest);
                 Error -> Error 
             end;
         Error -> Error
@@ -85,15 +90,15 @@ open_for_write(Filename) ->
     end.
 write(#ai_blob_file{fd=Fd, size = Size, ctx=Ctx,mode = Mode}=Ref, Data) when is_binary(Data) ->
     case Mode of 
-        read -> {error,not_writable_blob};
-        _->
+        write->
             DataSize = erlang:byte_size(Data),
             case file:write(Fd, Data) of
                 ok -> {ok, Ref#ai_blob_file{ size = Size+ DataSize,ctx = crypto:hash_update(Ctx, Data)}};
                 Error -> Error
-            end
+            end;
+        _ -> {error,not_writable_blob}
     end.
-close(#ai_blob_file{fd=Fd,size = Size,ctx = Ctx})->
+close(#ai_blob_file{fd=Fd,size = Size,ctx = Ctx} = Ref)->
     case file:sync(Fd) of
         ok ->
             Digest = crypto:hash_final(Ctx),
@@ -101,7 +106,7 @@ close(#ai_blob_file{fd=Fd,size = Size,ctx = Ctx})->
             file:write(Fd, Digest),
             file:write(Fd,<<Size:64/big-unsigned-integer>>),
             file:close(Fd),
-            {ok,Digest};
+            {ok,Ref#ai_blob_file{ctx = Digest,mode = close},Digest};
         Error ->
             file:close(Fd),
             Error
@@ -130,13 +135,17 @@ open_for_read(Filename,CheckConsistency)->
     end.
 read(#ai_blob_file{fd = Fd,mode = Mode} = Ref, Size) ->
     case Mode of 
-        write -> {error,not_readable_blob};
-        _ ->
-        case file:read(Fd, Size) of
-            {ok,Data} -> {ok,Ref,Data};
-            Error -> Error
-        end
+        read ->
+            case file:read(Fd, Size) of
+                {ok,Data} -> {ok,Ref,Data};
+                Error -> Error
+            end;
+        write -> {error,not_readable_blob}
     end.
 
 file_data_range(#ai_blob_file{size = Size})-> {?TOTAL_HEADER_SIZE_BYTES,Size}.
-   
+digest(#ai_blob_file{ctx = Digest,mode = Mode}) ->
+    case Mode of 
+        write -> {error,not_hava_digest};
+        _ -> {ok,Digest}
+    end.
