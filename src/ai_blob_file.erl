@@ -131,7 +131,7 @@ open_for_read(Filename,CheckConsistency)->
                     file:close(Fd),
                     Error
             end;
-        {_Any,Error}-> Error 
+        {_Any,{error,Reason}}-> {error,Reason} 
     end.
 read(#ai_blob_file{fd = Fd,mode = Mode} = Ref, Size) ->
     case Mode of 
