@@ -2,7 +2,7 @@
 
 -export([open_for_write/1,write/2,close/1]).
 -export([open_for_read/1,open_for_read/2,read/2]).
--export([file_data_range/1,digest/1]).
+-export([data_range/1,digest/1]).
 
 -define(MAGIC_NUMBER, <<16#7334:16>>).
 -define(MAGIC_NUMBER_SIZE_BYTES, 2).
@@ -143,7 +143,7 @@ read(#ai_blob_file{fd = Fd,mode = Mode} = Ref, Size) ->
         write -> {error,not_readable_blob}
     end.
 
-file_data_range(#ai_blob_file{size = Size})-> {?TOTAL_HEADER_SIZE_BYTES,Size}.
+data_range(#ai_blob_file{size = Size})-> {?TOTAL_HEADER_SIZE_BYTES,Size}.
 digest(#ai_blob_file{ctx = Digest,mode = Mode}) ->
     case Mode of 
         write -> {error,not_hava_digest};

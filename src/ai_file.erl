@@ -52,10 +52,13 @@ file_size(Filename)->
               end;
          Error-> Error
     end.
-
+hash_to_path(Level,HashString) when erlang:is_binary(HashString)->
+    hash_to_path(Level,erlang:binary_to_list(HashString));
 hash_to_path(Level,HashString)->
     {Path,_Rest} = hash_to_path(Level,HashString,[]),
     filename:join(Path).
+hash_to_fullname(Level,HashString) when erlang:is_binary(HashString)->
+    hash_to_fullname(Level,erlang:binary_to_list(HashString));
 hash_to_fullname(Level,HashString)->
     {Path,Rest} = hash_to_path(Level,HashString,[]),
     HashPath = filename:join(Path),
