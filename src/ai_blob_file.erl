@@ -37,7 +37,7 @@ checksum_consistency(Fd,Ctx,Digest)->
 
 is_blob_broken(Fd)->
     {ok, _Any} = file:position(Fd, {bof, ?MAGIC_NUMBER_SIZE_BYTES + ?VERSION_NUMBER_SIZE_BYTES}),
-    case file:read(?CHECKSUM_SIZE_BYTES) of
+    case file:read(Fd,?CHECKSUM_SIZE_BYTES) of
         {ok,Digest} -> 
             {ok, ?TOTAL_HEADER_SIZE_BYTES} = file:position(Fd, {bof, ?TOTAL_HEADER_SIZE_BYTES}),
             checksum_consistency(Fd,crypto:hash_init(sha),Digest);
@@ -52,7 +52,7 @@ is_blob_file(Fd)->
     end.
 blob_fd(Fd)->
     {ok, _Any} = file:position(Fd, {bof, ?MAGIC_NUMBER_SIZE_BYTES + ?VERSION_NUMBER_SIZE_BYTES}),
-    case  file:read(?CHECKSUM_SIZE_BYTES) of 
+    case  file:read(Fd,?CHECKSUM_SIZE_BYTES) of 
         {ok,Digest} -> blob_fd(Fd,Digest);
         Error -> Error 
     end.
