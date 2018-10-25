@@ -98,18 +98,32 @@ write(#ai_blob_file{fd=Fd, size = Size, ctx=Ctx,mode = Mode}=Ref, Data) when is_
             end;
         _ -> {error,not_writable_blob}
     end.
-close(#ai_blob_file{fd=Fd,size = Size,ctx = Ctx} = Ref)->
+write_close(#ai_blob_file{fd = Fd,size = Size,ctx = Ctx} = Ref)->
     case file:sync(Fd) of
         ok ->
             Digest = crypto:hash_final(Ctx),
             {ok, _Any} = file:position(Fd, {bof, ?MAGIC_NUMBER_SIZE_BYTES + ?VERSION_NUMBER_SIZE_BYTES}),
             file:write(Fd, Digest),
             file:write(Fd,<<Size:64/big-unsigned-integer>>),
-            file:close(Fd),
-            {ok,Ref#ai_blob_file{ctx = Digest,mode = close},Digest};
+            case file:close(Fd) of 
+                ok -> {ok,Ref#ai_blob_file{ctx = Digest,mode = close},Digest};
+                Error -> Error 
+            end;
         Error ->
             file:close(Fd),
             Error
+    end.
+close(#ai_blob_file{fd=Fd,ctx = Ctx,mode = Mode} = Ref)->
+    case Mode of 
+        write ->
+            write_close(Ref);
+        read ->
+            case file:close(Fd) of 
+                ok -> {ok,Ref,Ctx};
+                Error -> Error 
+            end;
+        _ ->
+            {ok,Ref,Ctx}
     end.
 open_for_read(Filename)->
     open_for_read(Filename,true).
