@@ -15,7 +15,7 @@ dir() ->
 
 run_with_tmp(Name,Options,MFA)->
     Dir = name(Name,Options),
-    case ai_file:create_dir(Dir) of
+    case ai_file:ensure_dir(Dir) of
         ok ->
             try
                 ai_function:run_mfa(MFA,[Dir])

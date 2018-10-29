@@ -2,7 +2,7 @@
 -include_lib("kernel/include/file.hrl").
 
 -export([files_in_dir/1,priv_dir/2]).
--export([remove_recursive/1,create_dir/1,create_priv_dir/2]).
+-export([remove_recursive/1,ensure_dir/1]).
 -export([open_for_write/1,open_for_read/1,open_for_append/1,file_size/1]).
 -export([hash_to_path/2,hash_to_fullname/2]).
 
@@ -11,17 +11,14 @@ files_in_dir(Dir) ->
 		{ok, SubFiles} = file:list_dir(Dir),
 		[filename:join(Dir, SubFile) || SubFile <- SubFiles].
 
+-spec priv_dir(App :: atom(),Dir :: binary()| list()) -> binary()| list().
 priv_dir(App,Dir)->
     PrivDir = code:priv_dir(App),
 	filename:join([PrivDir,Dir]).
 
-
-create_priv_dir(App,Dir)->
-        TheDir = priv_dir(App,Dir),
-		filelib:ensure_dir(filename:join([TheDir,"."])).
-
-create_dir(Path)->
-    filelib:ensure_dir(filename:join([Path, "."])).
+-spec ensure_dir(Dir :: binary()| list())-> ok | {error, term()}.
+ensure_dir(Dir)->
+    filelib:ensure_dir(filename:join([Dir,"."])).
 
 remove_recursive(Path) ->
 	case filelib:is_dir(Path) of
