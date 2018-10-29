@@ -1,6 +1,7 @@
 -module(ai_http_cache).
 -include("ailib.hrl").
 %% only support http 1.1
+-export([initialize_mnesia_table/1,initialize_mnesia_table/0]).
 -export([validate_hit/1,hit/1,cache/3,cache/2]).
 
 -define(CACHE_CONTROL,<<"cache-control">>).
@@ -9,6 +10,14 @@
 -define(ETAG,<<"etag">>).
 -define(LAST_MODIFIED,<<"last-modified">>).
 -define(DATE,<<"date">>).
+
+
+initialize_mnesia_table()->
+    initialize_mnesia_table([node()]).
+initialize_mnesia_table(Nodes)->    
+    {atomic,ok} = mnesia:create_table(ai_http_cache,  [{disc_copies, Nodes}, 
+                                        {attributes, record_info(fields, ai_http_cache)}]).
+
 
 find(Table,Key) ->
     F = fun() ->
@@ -85,6 +94,7 @@ fields_need(_,Acc) -> Acc.
 fileds(Headers,Item)->    
     lists:foldl(fun fields_need/2,Item,Headers).
 
+-spec cache(Key :: binary(), CacheKey :: term(), Headers :: proplists:proplists()) -> ok | {aborted,term()}.
 cache(Key,CacheKey,Headers)->
     case can_cache(Headers) of 
         false -> ok;
@@ -97,6 +107,7 @@ cache(Key,CacheKey,Headers)->
             CacheItem = fileds(Headers,Item),
             write(CacheItem)
     end.
+-spec cache(Key :: binary(),Headers:: proplists:proplists()) -> ok | {aborted,term()}.
 cache(Key,Headers)->
     case hit(Key) of 
         {ok,Item} ->
