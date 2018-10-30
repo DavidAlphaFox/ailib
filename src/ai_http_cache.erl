@@ -84,7 +84,7 @@ no_cache(Headers)->
 age_validate(no_cache,_Date,_MaxAge)-> expired;
 age_validate(age,undefined,_MaxAge) -> expired;
 age_validate(age,_Date,undefined) -> expired;
-age_validate(aga,Date,MaxAge)->
+age_validate(age,Date,MaxAge)->
     CachedData = ai_rfc822_date:universal_time(ai_rfc822_date:parse(Date)),
     Now = calendar:universal_time(),
     Age = calendar:datetime_to_gregorian_seconds(Now) - calendar:datetime_to_gregorian_seconds(CachedData),
