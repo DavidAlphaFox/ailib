@@ -58,7 +58,8 @@ direct_hit(Key) ->
     case hit(Key) of
         not_found -> not_found;
         {ok,C} ->{hit,C#ai_http_cache.cache_key,C#ai_http_cache.headers}
-    end
+    end.
+
 can_cache(Headers) ->
     CacheControl = proplists:get_value(?CACHE_CONTROL,Headers),
     can_cache(CacheControl,Headers).
@@ -127,5 +128,5 @@ cache(Key,Headers)->
         not_found -> ok
     end.
 
--spec uncache(Key :: binary())-> ok | {aborted,term()}
+-spec uncache(Key :: binary())-> ok | {aborted,term()}.
 uncache(Key) -> remove(Key).

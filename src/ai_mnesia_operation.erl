@@ -9,5 +9,6 @@ error_ignore_transaction(F,Default)->
         {atomic, Result} -> Result;
         {aborted, _Reason} -> Default
     end.	
+
 one_or_none({atomic,[One]})-> One;
-one_or_none({atomic,[]}) -> not_found;
+one_or_none({atomic,[]}) -> not_found.
