@@ -2,7 +2,7 @@
 -include("ailib.hrl").
 %% only support http 1.1
 -export([initialize_mnesia_table/1,initialize_mnesia_table/0]).
--export([validate_hit/1,hit/1,cache/3,cache/2]).
+-export([validate_hit/1,direct_hit/1,cache/3,cache/2,uncache/1]).
 
 -define(CACHE_CONTROL,<<"cache-control">>).
 -define(NO_STORE,<<"no-store">>).
@@ -19,9 +19,9 @@ initialize_mnesia_table(Nodes)->
                                         {attributes, record_info(fields, ai_http_cache)}]).
 
 
-find(Table,Key) ->
+find(Key) ->
     F = fun() ->
-            mnesia:read(Table,Key)
+            mnesia:read(ai_http_cache,Key)
         end,
     ai_mnesia_operation:error_ignore_transaction(F).
 
@@ -33,10 +33,18 @@ write(Rec) ->
         {atomic,ok} -> ok;
         Res -> Res
     end.
+remove(Key)->
+    F = fun() ->
+            mnesia:delete({ai_http_cache,Key})
+        end,
+    case mnesia:transaction(F) of
+        {atomic,ok} -> ok;
+        Res -> Res
+    end.  
             
 -spec hit(Key:: binary()) -> {ok,tuple()} | not_found.
 hit(Key)->
-    case find(ai_http_cache,Key) of
+    case find(Key) of
         [] -> not_found;
         [C] -> {ok,C}
     end.
@@ -46,7 +54,11 @@ validate_hit(Key)->
         not_found -> not_found;
         {ok,C} -> cache_validate(C)
     end.
-
+direct_hit(Key) ->
+    case hit(Key) of
+        not_found -> not_found;
+        {ok,C} ->{hit,C#ai_http_cache.cache_key,C#ai_http_cache.headers}
+    end
 can_cache(Headers) ->
     CacheControl = proplists:get_value(?CACHE_CONTROL,Headers),
     can_cache(CacheControl,Headers).
@@ -114,3 +126,6 @@ cache(Key,Headers)->
             cache(Key,Item#ai_http_cache.cache_key,Headers);
         not_found -> ok
     end.
+
+-spec uncache(Key :: binary())-> ok | {aborted,term()}
+uncache(Key) -> remove(Key).

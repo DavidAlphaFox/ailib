@@ -50,9 +50,9 @@ name(Name,Options)->
                          _ -> ""
                      end                     
              end,
-		Path = maps:get(path, Options1,dir()),
+	Path = maps:get(path, Options1,dir()),
     TmpName = lists:flatten([Prefix,Name,"-",ai_ascii_random:rand(20),Suffix]),
-		filename:join([Path, TmpName]).
+    filename:join([Path, TmpName]).
 
 
 
