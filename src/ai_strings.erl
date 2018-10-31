@@ -1,7 +1,13 @@
 -module(ai_strings).
+-compile({inline, [stack/2,append/2]}).
+
 -export([to_string/1,to_string/2]).
 -export([hash_to_string/3,md5_string/2,sha_string/2,sha256_string/2,sha512_string/2]).
 -export([prefix/2,find/3,slice/2,slice/3]).
+
+
+-define(ASCII_LIST(CP1,CP2), CP1 < 256, CP2 < 256, CP1 =/= $\r).
+
 to_string(Val) when is_integer(Val) -> erlang:integer_to_binary(Val);
 to_string(Val) when is_float(Val) -> erlang:list_to_binary(io_lib:format("~.2f", [Val]));
 to_string(Val) when is_atom(Val) -> erlang:atom_to_binary(Val);
@@ -65,7 +71,7 @@ end.
 -spec find(String, SearchPattern, Dir) -> unicode:chardata() | 'nomatch' when
       String::unicode:chardata(),
       SearchPattern::unicode:chardata(),
-      Dir::direction().
+      Dir::atom().
 find(String, "", _) -> String;
 find(String, <<>>, _) -> String;
 find(String, SearchPattern, leading) ->
@@ -282,6 +288,17 @@ slice_bin(CD, CP1, N) when N > 0 ->
         [] -> 0
     end;
 slice_bin(CD, CP1, 0) -> byte_size(CD)+byte_size(<<CP1/utf8>>).
+
+stack(Bin, []) -> Bin;
+stack(<<>>, St) -> St;
+stack([], St) -> St;
+stack(Bin, St) -> [Bin|St].
+
+append(Char, <<>>) when is_integer(Char) -> [Char];
+append(Char, <<>>) when is_list(Char) -> Char;
+append(Char, Bin) when is_binary(Bin) -> [Char,Bin];
+append(Char, Str) when is_integer(Char) -> [Char|Str];
+append(GC, Str) when is_list(GC) -> GC ++ Str.
 %%%
 %%% private
 %%%
