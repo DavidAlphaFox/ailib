@@ -8,7 +8,7 @@
 -spec dir() -> string() | false.
 dir() ->
 	Keys = ["TMPDIR","TMP","TMP"],
-	case lists:search(fun(I)-> found_in_env(with_env(I)) end,Keys) of
+	case ai_lists:search(fun(I)-> found_in_env(with_env(I)) end,Keys) of
 		{value,Key}-> with_env(Key);
 		false -> try_default_tmp()
 	end.
@@ -74,9 +74,9 @@ try_default_tmp() ->
 
 try_cwd()->
 	Cwd = case file:get_cwd() of
-					{ok, Dir} -> Dir;
-					_ -> "."
-				end,
+			    {ok, Dir} -> Dir;
+				_ -> "."
+			end,
 	case is_dir_writable(Cwd) of
 		false -> false;
 		LTmp -> LTmp
