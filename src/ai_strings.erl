@@ -49,7 +49,7 @@ prefix(Str, Prefix0) ->
     end.
 
 prefix_1(Cs0, [GC]) ->
-    case unicode_util:gc(Cs0) of
+    case ai_unicode_util:gc(Cs0) of
         [GC|Cs] -> Cs;
         _ -> nomatch
     end;
@@ -64,7 +64,7 @@ prefix_1(<<CP/utf8, Cs/binary>>, [Pre|PreR]) ->
         false -> nomatch
     end;
 prefix_1(Cs0, [Pre|PreR]) ->
-    case unicode_util:cp(Cs0) of
+    case ai_unicode_util:cp(Cs0) of
         [Pre|Cs] ->  prefix_1(Cs,PreR);
         _ -> nomatch
 end.
@@ -96,7 +96,7 @@ find_l([Bin|Cont0], Needle) when is_binary(Bin) ->
             Cs
     end;
 find_l(Cs0, [C|_]=Needle) when is_list(Cs0) ->
-    case unicode_util:cp(Cs0) of
+    case ai_unicode_util:cp(Cs0) of
         [C|Cs] ->
             case prefix_1(Cs0, Needle) of
                 nomatch -> find_l(Cs, Needle);
@@ -127,11 +127,11 @@ find_r([Bin|Cont0], Needle, Res) when is_binary(Bin) ->
         {nomatch,_,Cont} ->
             find_r(Cont, Needle, Res);
         {_, Cs0, _} ->
-            [_|Cs] = unicode_util:gc(Cs0),
+            [_|Cs] = ai_unicode_util:gc(Cs0),
             find_r(Cs, Needle, Cs0)
     end;
 find_r(Cs0, [C|_]=Needle, Res) when is_list(Cs0) ->
-    case unicode_util:cp(Cs0) of
+    case ai_unicode_util:cp(Cs0) of
         [C|Cs] ->
             case prefix_1(Cs0, Needle) of
                 nomatch -> find_r(Cs, Needle, Res);
@@ -182,7 +182,7 @@ bin_search_str_2(Bin0, Start, Cont, First, SearchCPs) ->
         {Where0, _} ->
             Where = Start+Where0,
             <<Keep:Where/binary, Cs0/binary>> = Bin0,
-            [GC|Cs]=unicode_util:gc(Cs0),
+            [GC|Cs]=ai_unicode_util:gc(Cs0),
             case prefix_1(stack(Cs0,Cont), SearchCPs) of
                 nomatch when is_binary(Cs) ->
                     KeepSz = byte_size(Bin0) - byte_size(Cs),
@@ -237,7 +237,7 @@ slice_l0(L, N) ->
 slice_l([CP1|[CP2|_]=Cont], N) when ?ASCII_LIST(CP1,CP2),N > 0 ->
     slice_l(Cont, N-1);
 slice_l(CD, N) when N > 0 ->
-    case unicode_util:gc(CD) of
+    case ai_unicode_util:gc(CD) of
         [_|Cont] -> slice_l(Cont, N-1);
         [] -> []
     end;
@@ -247,9 +247,9 @@ slice_l(Cont, 0) ->
 slice_lb(<<CP2/utf8, Bin/binary>>, CP1, N) when ?ASCII_LIST(CP1,CP2), N > 1 ->
     slice_lb(Bin, CP2, N-1);
 slice_lb(Bin, CP1, N) ->
-    [_|Rest] = unicode_util:gc([CP1|Bin]),
+    [_|Rest] = ai_unicode_util:gc([CP1|Bin]),
     if N > 1 ->
-            case unicode_util:cp(Rest) of
+            case ai_unicode_util:cp(Rest) of
                 [CP2|Cont] -> slice_lb(Cont, CP2, N-1);
                 [] -> <<>>
             end;
@@ -272,7 +272,7 @@ slice_trail(CD, N) when is_list(CD) ->
 slice_list([CP1|[CP2|_]=Cont], N) when ?ASCII_LIST(CP1,CP2),N > 0 ->
     [CP1|slice_list(Cont, N-1)];
 slice_list(CD, N) when N > 0 ->
-    case unicode_util:gc(CD) of
+    case ai_unicode_util:gc(CD) of
         [GC|Cont] -> append(GC, slice_list(Cont, N-1));
         [] -> []
     end;
@@ -282,8 +282,8 @@ slice_list(_, 0) ->
 slice_bin(<<CP2/utf8, Bin/binary>>, CP1, N) when ?ASCII_LIST(CP1,CP2), N > 0 ->
     slice_bin(Bin, CP2, N-1);
 slice_bin(CD, CP1, N) when N > 0 ->
-    [_|Bin] = unicode_util:gc([CP1|CD]),
-    case unicode_util:cp(Bin) of
+    [_|Bin] = ai_unicode_util:gc([CP1|CD]),
+    case ai_unicode_util:cp(Bin) of
         [CP2|Cont] -> slice_bin(Cont, CP2, N-1);
         [] -> 0
     end;
