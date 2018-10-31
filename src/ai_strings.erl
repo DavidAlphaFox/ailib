@@ -1,7 +1,7 @@
 -module(ai_strings).
 -export([to_string/1,to_string/2]).
 -export([hash_to_string/3,md5_string/2,sha_string/2,sha256_string/2,sha512_string/2]).
--export([prefix/2,find/3]).
+-export([prefix/2,find/3,slice/2,slice/3]).
 to_string(Val) when is_integer(Val) -> erlang:integer_to_binary(Val);
 to_string(Val) when is_float(Val) -> erlang:list_to_binary(io_lib:format("~.2f", [Val]));
 to_string(Val) when is_atom(Val) -> erlang:atom_to_binary(Val);
@@ -189,6 +189,99 @@ bin_search_str_2(Bin0, Start, Cont, First, SearchCPs) ->
                     {Keep, [Cs0|Cont], Rest}
             end
 end.
+%% Slice a string and return rest of string
+%% Note: counts grapheme_clusters
+-spec slice(String, Start) -> Slice when
+      String::unicode:chardata(),
+      Start :: non_neg_integer(),
+      Slice :: unicode:chardata().
+slice(CD, N) when is_integer(N), N >= 0 ->
+    case slice_l0(CD, N) of
+        [] when is_binary(CD) -> <<>>;
+        Res -> Res
+    end.
+
+-spec slice(String, Start, Length) -> Slice when
+      String::unicode:chardata(),
+      Start :: non_neg_integer(),
+      Length :: 'infinity' | non_neg_integer(),
+      Slice :: unicode:chardata().
+slice(CD, N, Length)
+  when is_integer(N), N >= 0, is_integer(Length), Length > 0 ->
+    case slice_l0(CD, N) of
+        [] when is_binary(CD) -> <<>>;
+        L -> slice_trail(L, Length)
+    end;
+slice(CD, N, infinity) ->
+    case slice_l0(CD, N) of
+        [] when is_binary(CD) -> <<>>;
+        Res -> Res
+    end;
+slice(CD, _, 0) ->
+    case is_binary(CD) of
+        true  -> <<>>;
+        false -> []
+end.
+
+slice_l0(<<CP1/utf8, Bin/binary>>, N) when N > 0 ->
+    slice_lb(Bin, CP1, N);
+slice_l0(L, N) ->
+    slice_l(L, N).
+
+slice_l([CP1|[CP2|_]=Cont], N) when ?ASCII_LIST(CP1,CP2),N > 0 ->
+    slice_l(Cont, N-1);
+slice_l(CD, N) when N > 0 ->
+    case unicode_util:gc(CD) of
+        [_|Cont] -> slice_l(Cont, N-1);
+        [] -> []
+    end;
+slice_l(Cont, 0) ->
+    Cont.
+
+slice_lb(<<CP2/utf8, Bin/binary>>, CP1, N) when ?ASCII_LIST(CP1,CP2), N > 1 ->
+    slice_lb(Bin, CP2, N-1);
+slice_lb(Bin, CP1, N) ->
+    [_|Rest] = unicode_util:gc([CP1|Bin]),
+    if N > 1 ->
+            case unicode_util:cp(Rest) of
+                [CP2|Cont] -> slice_lb(Cont, CP2, N-1);
+                [] -> <<>>
+            end;
+       N =:= 1 ->
+            Rest
+    end.
+
+slice_trail(Orig, N) when is_binary(Orig) ->
+    case Orig of
+        <<CP1/utf8, Bin/binary>> when N > 0 ->
+            Length = slice_bin(Bin, CP1, N),
+            Sz = byte_size(Orig) - Length,
+            <<Keep:Sz/binary, _/binary>> = Orig,
+            Keep;
+        _ -> <<>>
+    end;
+slice_trail(CD, N) when is_list(CD) ->
+    slice_list(CD, N).
+
+slice_list([CP1|[CP2|_]=Cont], N) when ?ASCII_LIST(CP1,CP2),N > 0 ->
+    [CP1|slice_list(Cont, N-1)];
+slice_list(CD, N) when N > 0 ->
+    case unicode_util:gc(CD) of
+        [GC|Cont] -> append(GC, slice_list(Cont, N-1));
+        [] -> []
+    end;
+slice_list(_, 0) ->
+    [].
+
+slice_bin(<<CP2/utf8, Bin/binary>>, CP1, N) when ?ASCII_LIST(CP1,CP2), N > 0 ->
+    slice_bin(Bin, CP2, N-1);
+slice_bin(CD, CP1, N) when N > 0 ->
+    [_|Bin] = unicode_util:gc([CP1|CD]),
+    case unicode_util:cp(Bin) of
+        [CP2|Cont] -> slice_bin(Cont, CP2, N-1);
+        [] -> 0
+    end;
+slice_bin(CD, CP1, 0) -> byte_size(CD)+byte_size(<<CP1/utf8>>).
 %%%
 %%% private
 %%%
