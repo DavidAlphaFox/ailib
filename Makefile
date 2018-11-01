@@ -1,5 +1,5 @@
 PROJECT = ailib
-PROJECT_DESCRIPTION = New project
+PROJECT_DESCRIPTION = Base lib for products from ailink.io
 PROJECT_VERSION = 0.1.0
 
 DEPS = poolboy
