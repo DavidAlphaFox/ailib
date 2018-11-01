@@ -4,10 +4,10 @@
 -export([open_for_read/1,open_for_read/2,read/2]).
 -export([data_range/1,digest/1]).
 
--define(MAGIC_NUMBER, <<16#7334:16>>).
--define(MAGIC_NUMBER_SIZE_BYTES, 2).
--define(VERSION_NUMBER,<<16#1:16>>).
--define(VERSION_NUMBER_SIZE_BYTES,2).
+-define(MAGIC_NUMBER, <<16#7334:32/big-unsigned-integer>>).
+-define(MAGIC_NUMBER_SIZE_BYTES, 4).
+-define(VERSION_NUMBER,<<16#1:32/big-unsigned-integer>>).
+-define(VERSION_NUMBER_SIZE_BYTES,4).
 -define(CHECKSUM_SIZE_BYTES, 20).
 -define(FILESIZE_SIZE_BYTES, 8).
 -define(TOTAL_HEADER_SIZE_BYTES, 4 * 1024).
@@ -42,10 +42,12 @@ internal_append(Fd,Data)->
     ],
     ai_lists:run_pipe(List).
 write_header(Fd)->
-    case file:write(Fd, ?MAGIC_NUMBER) of
-        ok -> file:write(Fd,?VERSION_NUMBER);
-        Error ->  Error
-    end.
+    FillSize = 
+        (?TOTAL_HEADER_SIZE_BYTES - ?MAGIC_NUMBER_SIZE_BYTES - ?VERSION_NUMBER_SIZE_BYTES)*8,
+    Data = <<?MAGIC_NUMBER/binary,?VERSION_NUMBER/binary,0:FillSize/integer>>,
+    Size = erlang:byte_size(Data),
+    io:format("header ~p ~p~n",[Data,Size]),
+    internal_write(Fd,0,Data).
 
 calculate_checksum(Fd,Ctx)->
     case file:read(Fd,?BLOCK_SIZE_BYTES) of 
@@ -121,7 +123,7 @@ write(#ai_blob_file{fd=Fd, size = Size, ctx=Ctx,mode = Mode}=Ref, Data) when is_
     case Mode of 
         write->
             DataSize = erlang:byte_size(Data),
-            case file:write(Fd,Data) of
+            case internal_append(Fd,Data) of
                 ok -> {ok, Ref#ai_blob_file{ size = Size + DataSize,ctx = crypto:hash_update(Ctx, Data)}};
                 {error,Reason} -> {error,Reason}
             end;
