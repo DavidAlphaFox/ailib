@@ -3,7 +3,8 @@
 
 -export([files_in_dir/1,priv_dir/2]).
 -export([remove_recursive/1,ensure_dir/1]).
--export([open_for_write/1,open_for_read/1,open_for_append/1,file_size/1]).
+-export([open_for_write/1,open_for_read/1,open_for_append/1,open_for_read_write/1]).
+-export([file_size/1]).
 -export([hash_to_path/2,hash_to_fullname/2]).
 
 
@@ -33,7 +34,13 @@ open_for_write(Filename) ->
     case file:open(Filename, [exclusive, write, binary, raw]) of
 		{ok, Fd} -> {ok,Fd};
 		Error -> Error
-	end.			
+	end.
+open_for_read_write(Filename)->
+    filelib:ensure_dir(Filename),	
+    case file:open(Filename,[write,read,binary,raw]) of 
+        {ok,Fd} -> {ok,Fd};
+        Error -> Error 
+    end. 
 open_for_append(Filename)->
     filelib:ensure_dir(Filename),
     case file:open(Filename,[append,binary,raw]) of 

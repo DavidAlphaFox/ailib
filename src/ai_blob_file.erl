@@ -15,15 +15,32 @@
 
 -record(ai_blob_file,{fd,filename,size,ctx,mode}).
 bof_seek(Fd,Pos)-> file:position(Fd,{bof,Pos}).
-size_read(Fd,Pos,Size,{ok,Pos})-> file:read(Fd,Size);
-size_read(_Fd,_Pos,_Size,Error) -> Error.
+seek_end(Fd) -> file:position(Fd,{eof,0}).
+seek_read(Fd,Pos,Size,{ok,Pos})-> file:read(Fd,Size);
+seek_read(_Fd,_Pos,_Size,Error) -> Error.
+seek_write(Fd,Data,{ok,_Pos}) -> file:write(Fd,Data);
+seek_write(_Fd,_Data,Error) -> Error.
+seek_write(Fd,Pos,Data,{ok,Pos}) -> file:write(Fd,Data);
+seek_write(_Fd,_Pos,_Data,Error) -> Error.
+
 internal_read(Fd,Pos,Size)->
     List = [
         {fun bof_seek/2,[Fd]},
-        {fun size_read/4,[Fd,Pos,Size]}
+        {fun seek_read/4,[Fd,Pos,Size]}
     ],
     ai_lists:run_pipe(List,[Pos]).
-
+internal_write(Fd,Pos,Data)->
+    List = [
+        {fun bof_seek/2,[Fd]},
+        {fun seek_write/4,[Fd,Pos,Data]}
+    ],
+    ai_lists:run_pipe(List,[Pos]).
+internal_append(Fd,Data)->
+    List = [
+        {fun seek_end/1,[Fd]},
+        {fun seek_write/3,[Fd,Data]}
+    ],
+    ai_lists:run_pipe(List).
 write_header(Fd)->
     case file:write(Fd, ?MAGIC_NUMBER) of
         ok -> file:write(Fd,?VERSION_NUMBER);
@@ -104,10 +121,9 @@ write(#ai_blob_file{fd=Fd, size = Size, ctx=Ctx,mode = Mode}=Ref, Data) when is_
     case Mode of 
         write->
             DataSize = erlang:byte_size(Data),
-            file:position(Fd,{eof,0}),
-            case file:write(Fd, Data) of
-                ok -> {ok, Ref#ai_blob_file{ size = Size+ DataSize,ctx = crypto:hash_update(Ctx, Data)}};
-                Error -> Error
+            case file:write(Fd,Data) of
+                ok -> {ok, Ref#ai_blob_file{ size = Size + DataSize,ctx = crypto:hash_update(Ctx, Data)}};
+                {error,Reason} -> {error,Reason}
             end;
         _ -> {error,not_writable_blob}
     end.
@@ -115,11 +131,14 @@ close(#ai_blob_file{fd = Fd,size = Size,ctx = Ctx,mode = write} = Ref)->
     case file:sync(Fd) of
         ok ->
             Digest = crypto:hash_final(Ctx),
-            {ok, _Any} = file:position(Fd, {bof, ?MAGIC_NUMBER_SIZE_BYTES + ?VERSION_NUMBER_SIZE_BYTES}),
-            file:write(Fd, Digest),
-            file:write(Fd,<<Size:64/big-unsigned-integer>>),
-            case file:close(Fd) of 
-                ok -> {ok,Ref#ai_blob_file{fd = undefined, ctx = Digest,mode = close},Digest};
+            Data = <<Digest/binary,Size:64/big-unsigned-integer>>,
+            Pos = ?MAGIC_NUMBER_SIZE_BYTES + ?VERSION_NUMBER_SIZE_BYTES,
+            case internal_write(Fd,Pos,Data) of 
+                ok -> 
+                    case file:close(Fd) of 
+                        ok -> {ok,Ref#ai_blob_file{fd = undefined, ctx = Digest,mode = close},Digest};
+                        Error -> Error 
+                    end;
                 Error -> Error 
             end;
         Error ->
@@ -139,21 +158,23 @@ open_for_read(Filename)->
 open_for_read(Filename,CheckConsistency)->
     Opened = ai_file:open_for_read(Filename),
     case {CheckConsistency,Opened} of 
-        {true,{ok,Fd}} ->
-            case check_file(Fd) of 
-                {ok,BlobFd} -> {ok,BlobFd};
-                Error -> 
-                    file:close(Fd),
-                    Error
-            end;
-        {false,{ok,Fd}} ->
-            case warp_fd(Fd) of 
-                {ok,BlobFd} -> {ok,BlobFd};
-                Error ->
-                    file:close(Fd),
-                    Error
-            end;
+        {true,{ok,Fd}} -> with_check(Fd,true);
+        {false,{ok,Fd}} -> with_check(Fd,false);
         {_Any,{error,Reason}}-> {error,Reason} 
+    end.
+with_check(Fd,true)->
+    case check_file(Fd) of 
+        {ok,BlobFd} -> {ok,BlobFd};
+        Error -> 
+            file:close(Fd),
+            Error
+    end;
+with_check(Fd,false)->
+    case warp_fd(Fd) of 
+        {ok,BlobFd} -> {ok,BlobFd};
+        Error ->
+            file:close(Fd),
+            Error
     end.
 read(#ai_blob_file{fd = Fd,mode = Mode} = Ref, Size) ->
     case Mode of 
