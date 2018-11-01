@@ -61,18 +61,20 @@ check_magic(Fd)->
         _AnyData -> {error, not_blob_file}
     end.
 warp_fd(Fd)->
-    {ok, _Any} = file:position(Fd, {bof, ?MAGIC_NUMBER_SIZE_BYTES + ?VERSION_NUMBER_SIZE_BYTES}),
-    case  file:read(Fd,?CHECKSUM_SIZE_BYTES) of 
+    Pos = ?MAGIC_NUMBER_SIZE_BYTES + ?VERSION_NUMBER_SIZE_BYTES,
+    case internal_read(Fd,Pos,?CHECKSUM_SIZE_BYTES) of 
         {ok,Digest} -> warp_fd(Fd,Digest);
         Error -> Error 
     end.
 warp_fd(Fd,Digest)->
-    {ok, _Any} = file:position(Fd, {bof, ?MAGIC_NUMBER_SIZE_BYTES + ?VERSION_NUMBER_SIZE_BYTES + ?CHECKSUM_SIZE_BYTES}),
-    case file:read(Fd,?FILESIZE_SIZE_BYTES) of 
+    Pos = ?MAGIC_NUMBER_SIZE_BYTES + ?VERSION_NUMBER_SIZE_BYTES + ?CHECKSUM_SIZE_BYTES,
+    case internal_read(Fd,Pos,?FILESIZE_SIZE_BYTES) of 
         {ok,SizeBinary} ->
             <<Size:64/big-unsigned-integer>> = SizeBinary,
-            {ok, ?TOTAL_HEADER_SIZE_BYTES} = file:position(Fd, {bof, ?TOTAL_HEADER_SIZE_BYTES}),
-            {ok,#ai_blob_file{fd = Fd,size = Size,ctx = Digest, mode = read}};
+            case file:position(Fd, {bof, ?TOTAL_HEADER_SIZE_BYTES}) of 
+                {ok, ?TOTAL_HEADER_SIZE_BYTES} -> {ok,#ai_blob_file{fd = Fd,size = Size,ctx = Digest, mode = read}};
+                {error,Reason} -> {error,Reason}
+            end;
         {error,Reason} -> {error,Reason} 
     end.
 
@@ -109,7 +111,7 @@ write(#ai_blob_file{fd=Fd, size = Size, ctx=Ctx,mode = Mode}=Ref, Data) when is_
             end;
         _ -> {error,not_writable_blob}
     end.
-write_close(#ai_blob_file{fd = Fd,size = Size,ctx = Ctx} = Ref)->
+close(#ai_blob_file{fd = Fd,size = Size,ctx = Ctx,mode = write} = Ref)->
     case file:sync(Fd) of
         ok ->
             Digest = crypto:hash_final(Ctx),
@@ -117,25 +119,20 @@ write_close(#ai_blob_file{fd = Fd,size = Size,ctx = Ctx} = Ref)->
             file:write(Fd, Digest),
             file:write(Fd,<<Size:64/big-unsigned-integer>>),
             case file:close(Fd) of 
-                ok -> {ok,Ref#ai_blob_file{ctx = Digest,mode = close},Digest};
+                ok -> {ok,Ref#ai_blob_file{fd = undefined, ctx = Digest,mode = close},Digest};
                 Error -> Error 
             end;
         Error ->
             file:close(Fd),
             Error
-    end.
-close(#ai_blob_file{fd=Fd,ctx = Ctx,mode = Mode} = Ref)->
-    case Mode of 
-        write ->
-            write_close(Ref);
-        read ->
-            case file:close(Fd) of 
-                ok -> {ok,Ref,Ctx};
-                Error -> Error 
-            end;
-        _ ->
-            {ok,Ref,Ctx}
-    end.
+    end;
+close(#ai_blob_file{fd=Fd,ctx = Ctx,mode = read} = Ref)->
+    case file:close(Fd) of 
+        ok -> {ok,Ref#ai_blob_file{fd = undefined,mode = close},Ctx};
+        Error -> Error 
+    end;
+close(#ai_blob_file{ctx = Ctx} = Ref)-> {ok,Ref,Ctx}.
+
 open_for_read(Filename)->
     open_for_read(Filename,true).
 
