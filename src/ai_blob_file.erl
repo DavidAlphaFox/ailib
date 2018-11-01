@@ -4,7 +4,7 @@
 -export([open_for_read/1,open_for_read/2,read/2]).
 -export([data_range/1,digest/1]).
 
--define(MAGIC_NUMBER, <<16#7334:32/big-unsigned-integer>>).
+-define(MAGIC_NUMBER, <<16#61697334:32/big-unsigned-integer>>).
 -define(MAGIC_NUMBER_SIZE_BYTES, 4).
 -define(VERSION_NUMBER,<<16#1:32/big-unsigned-integer>>).
 -define(VERSION_NUMBER_SIZE_BYTES,4).
@@ -45,8 +45,6 @@ write_header(Fd)->
     FillSize = 
         (?TOTAL_HEADER_SIZE_BYTES - ?MAGIC_NUMBER_SIZE_BYTES - ?VERSION_NUMBER_SIZE_BYTES)*8,
     Data = <<?MAGIC_NUMBER/binary,?VERSION_NUMBER/binary,0:FillSize/integer>>,
-    Size = erlang:byte_size(Data),
-    io:format("header ~p ~p~n",[Data,Size]),
     internal_write(Fd,0,Data).
 
 calculate_checksum(Fd,Ctx)->
