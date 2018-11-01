@@ -63,7 +63,7 @@ direct_hit(Key) ->
 can_cache(Headers) ->
     CacheControl = proplists:get_value(?CACHE_CONTROL,Headers),
     can_cache(CacheControl,Headers).
-can_cache(undefined,_Headers) -> false;
+can_cache(undefined,Headers) -> no_cache(Headers);
 can_cache(?NO_STORE,_Headers) -> false;
 can_cache(?NO_CACHE,Headers) -> no_cache(Headers);
 can_cache(<<"private,",_Rest/binary>>,_Headers) -> false;
