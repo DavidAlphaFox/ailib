@@ -1,16 +1,18 @@
 -module(ai_blob_file).
 
 -export([open_for_write/1,write/2,close/1]).
--export([open_for_read/1,open_for_read/2,read/2]).
+-export([open_for_read/1,open_for_read/2,read/3]).
 -export([data_range/1,digest/1,data_size/1]).
 
--define(MAGIC_NUMBER, <<16#61697334:32/big-unsigned-integer>>).
--define(MAGIC_NUMBER_SIZE_BYTES, 4).
--define(VERSION_NUMBER,<<16#1:32/big-unsigned-integer>>).
--define(VERSION_NUMBER_SIZE_BYTES,4).
+-define(MAGIC_NUMBER, <<16#7334:16/big-unsigned-integer>>).
+-define(MAGIC_NUMBER_SIZE_BYTES, 2).
+-define(VERSION_NUMBER, <<16#1:16/big-unsigned-integer>>).
+-define(VERSION_NUMBER_SIZE_BYTES,2).
 -define(CHECKSUM_SIZE_BYTES, 20).
 -define(FILESIZE_SIZE_BYTES, 8).
--define(TOTAL_HEADER_SIZE_BYTES, 4 * 1024).
+-define(EXTERN_BIT_SIZE_BYTES, 1).
+-define(EXTERN_SIZE_BYTES, 1).
+-define(TOTAL_HEADER_SIZE_BYTES, 1024).
 -define(BLOCK_SIZE_BYTES,64 * 1024).
 
 -record(ai_blob_file,{fd,filename,size,ctx,mode}).
@@ -47,14 +49,18 @@ write_header(Fd)->
     Data = <<?MAGIC_NUMBER/binary,?VERSION_NUMBER/binary,0:FillSize/integer>>,
     internal_write(Fd,0,Data).
 
-calculate_checksum(Fd,Ctx)->
+calculate_checksum(Fd,Ctx,Final)->
     case file:read(Fd,?BLOCK_SIZE_BYTES) of 
-        {ok,Data} -> calculate_checksum(Fd, crypto:hash_update(Ctx, Data));
-        eof -> {ok,crypto:hash_final(Ctx)};
+        {ok,Data} -> calculate_checksum(Fd, crypto:hash_update(Ctx, Data),Final);
+        eof ->
+            if 
+                Final == true -> {ok,crypto:hash_final(Ctx)};
+                true -> {ok,Ctx}
+            end;
         Error -> Error
     end.
 check_consistency(Fd,Ctx,Digest)->
-    case calculate_checksum(Fd,Ctx) of 
+    case calculate_checksum(Fd,Ctx,true) of 
         {ok,Digest} -> {ok,Fd,Digest};
         {error,Reason} -> {error,Reason};
         _AnyDigest -> {error,corrupt_blob_file}
@@ -176,15 +182,18 @@ with_check(Fd,false)->
             file:close(Fd),
             Error
     end.
-read(#ai_blob_file{fd = Fd,mode = Mode} = Ref, Size) ->
+read(#ai_blob_file{fd = Fd,mode = Mode} = Ref,Offset, Size) ->
     case Mode of 
         read ->
-            case file:read(Fd, Size) of
+            Pos = Offset + ?TOTAL_HEADER_SIZE_BYTES,
+            case internal_read(Fd,Pos,Size) of
                 {ok,Data} -> {ok,Ref,Data};
                 Error -> Error
             end;
         write -> {error,not_readable_blob}
     end.
+
+
 data_size(#ai_blob_file{size = Size})-> Size;
 data_size(Filename)->
     case ai_file:file_size(Filename) of 
