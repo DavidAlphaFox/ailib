@@ -129,17 +129,18 @@ check_file(Fd)->
             end;
         Error -> Error
     end.          
+init_blob_file(Fd,Mode)->
+    case write_header(Fd) of
+        ok ->
+            {ok, ?TOTAL_HEADER_SIZE_BYTES} = file:position(Fd, {bof, ?TOTAL_HEADER_SIZE_BYTES}),
+            {ok, #ai_blob_file{fd = Fd, size = 0,ctx = crypto:hash_init(sha),mode = Mode}};
+        Error ->
+            file:close(Fd),
+            Error
+    end.
 open_for_write(Filename) ->
     case ai_file:open_for_write(Filename) of
-        {ok, Fd} ->
-            case write_header(Fd) of
-                ok ->
-                    {ok, ?TOTAL_HEADER_SIZE_BYTES} = file:position(Fd, {bof, ?TOTAL_HEADER_SIZE_BYTES}),
-                    {ok, #ai_blob_file{fd = Fd, size = 0,ctx = crypto:hash_init(sha),mode = write}};
-                Error ->
-                    file:close(Fd),
-                    Error
-            end;
+        {ok, Fd} -> init_blob_file(Fd,write);
         Error -> Error
     end.
 write(#ai_blob_file{fd=Fd, size = Size, ctx=Ctx,mode = Mode}=Ref, Data) when is_binary(Data) ->
@@ -210,34 +211,26 @@ open_for_read(Filename)->
     open_for_read(Filename,true).
 
 open_for_read(Filename,CheckConsistency)->
-    Opened = ai_file:open_for_read(Filename),
-    case {CheckConsistency,Opened} of 
-        {true,{ok,Fd}} -> with_check(Filename,Fd,true);
-        {false,{ok,Fd}} -> with_check(Filename,Fd,false);
-        {_Any,{error,Reason}}-> {error,Reason} 
+    case data_size(Filename) of 
+        {ok,Size}->
+            Opened = ai_file:open_for_read(Filename),
+            case {CheckConsistency,Opened} of 
+                {true,{ok,Fd}} -> with_check(Fd,Size,true);
+                {false,{ok,Fd}} -> with_check(Fd,Size,false);
+                {_Any,{error,Reason}}-> {error,Reason} 
+            end;
+        Error -> Error 
     end.
-with_check(Filename,Fd,true)->
-    case data_size(Filename) of 
-        {ok,Size} ->
-            case check_file(Fd) of 
-                {ok,BlobFd} -> {ok,BlobFd#ai_blob_file{size = Size}};
-                Error -> 
-                    file:close(Fd),
-                    Error
-            end;
-        Error ->
+with_check(Fd,Size,true)->
+    case check_file(Fd) of 
+        {ok,BlobFd} -> {ok,BlobFd#ai_blob_file{size = Size}};
+        Error -> 
             file:close(Fd),
-            Error 
+            Error
     end;
-with_check(Filename,Fd,false)->
-    case data_size(Filename) of 
-        {ok,Size} ->
-            case warp_fd(Fd) of 
-                {ok,BlobFd} -> {ok,BlobFd#ai_blob_file{size = Size}};
-                Error ->
-                    file:close(Fd),
-                    Error
-            end;
+with_check(Fd,Size,false)->
+    case warp_fd(Fd) of 
+        {ok,BlobFd} -> {ok,BlobFd#ai_blob_file{size = Size}};
         Error ->
             file:close(Fd),
             Error
@@ -275,14 +268,24 @@ read(#ai_blob_file{fd = Fd,mode = Mode} = Ref,Offset, Size) ->
     end.
 
 open_for_read_write(Filename)->
-    Opened = ai_file:open_for_read_write(Filename),
-    case Opened of 
-        {ok,Fd} ->
-            case with_check(Filename,Fd,false) of 
-                {ok,BlobFd} -> update_checksum(BlobFd#ai_blob_file{mode = read_write});
-                Error -> Error 
+    case data_size(Filename) of 
+        {error,enoent} ->
+            Opened = ai_file:open_for_read_write(Filename),
+            case Opened of 
+                {ok,Fd} -> init_blob_file(Fd,read_write);
+                Error -> Error
             end;
-        Error ->  Error
+        {ok,Size} ->
+            Opened = ai_file:open_for_read_write(Filename),
+            case Opened of 
+                {ok,Fd} ->
+                    case with_check(Fd,Size,false) of 
+                        {ok,BlobFd} -> update_checksum(BlobFd#ai_blob_file{mode = read_write});
+                        Error -> Error 
+                    end;
+                Error ->  Error
+            end;
+        Error -> Error 
     end.
 update_checksum(#ai_blob_file{fd = Fd} = Ref)->
    case calculate_checksum(Fd,crypto:hash_init(sha),false) of 
