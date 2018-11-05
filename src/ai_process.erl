@@ -12,6 +12,14 @@ monitor_process(Pid,Monitors)->
     end.
 
 demonitor_process(undefined,Monitors)-> Monitors;
+demonitor_process(Pid,Monitors) when erlang:is_pid(Pid)-> 
+    case maps:get(Pid,Monitors,undefined) of 
+        undefined -> Monitors;
+        MRef -> 
+            erlang:demonitor(MRef),
+            M1 = maps:remove(MRef,Monitors),
+            maps:remove(Pid,M1)
+    end;
 demonitor_process(MRef,Monitors)->
     erlang:demonitor(MRef),
     case maps:get(MRef,Monitors,undefined) of 
