@@ -12,12 +12,13 @@
 -define(VERSION_NUMBER, <<16#2:16/big-unsigned-integer>>).
 -define(VERSION_NUMBER_SIZE_BYTES,2).
 
--define(CHECKSUM_SIZE_BYTES, 20).
 -define(FILESIZE_SIZE_BYTES, 8).
+-define(CHECKSUM_SIZE_BYTES, 20).
 
 -define(EXTEND_BIT_SIZE_BYTES, 1).
 -define(EXTEND_HEADER_SIZE_BYTES, 1).
 -define(EXTEND_CHECKSUM_SIZE_BYTES, 20).
+
 -define(EXTEND_HEADER_MAX_SIZE,255).
 
 -define(EXTEND_HEADER_OFFSET,
@@ -27,6 +28,13 @@
 -define(BLOCK_SIZE_BYTES,64 * 1024).
 
 -record(ai_blob_file,{fd,filename,size,ctx,mode}).
+
+%% blob file is append only file
+%% blob file can be reopen
+%% blob file can be opened readonly,writeonly and readwrite.
+%% blob file support an extend header which less then 255 bytes.
+
+
 bof_seek(Fd,Pos)-> file:position(Fd,{bof,Pos}).
 seek_end(Fd) -> file:position(Fd,{eof,0}).
 seek_read(Fd,Pos,Size,{ok,Pos})-> file:read(Fd,Size);
@@ -78,7 +86,7 @@ check_consistency(Fd,Ctx,Digest)->
     end.
 
 check_broken(Fd)->
-    Pos = ?MAGIC_NUMBER_SIZE_BYTES + ?VERSION_NUMBER_SIZE_BYTES,
+    Pos = ?MAGIC_NUMBER_SIZE_BYTES + ?VERSION_NUMBER_SIZE_BYTES + ?FILESIZE_SIZE_BYTES,
     case internal_read(Fd,Pos,?CHECKSUM_SIZE_BYTES) of
         {ok,Digest} -> 
             case file:position(Fd, {bof, ?TOTAL_HEADER_SIZE_BYTES}) of 
@@ -95,13 +103,13 @@ check_magic(Fd)->
         _AnyData -> {error, not_blob_file}
     end.
 warp_fd(Fd)->
-    Pos = ?MAGIC_NUMBER_SIZE_BYTES + ?VERSION_NUMBER_SIZE_BYTES,
+    Pos = ?MAGIC_NUMBER_SIZE_BYTES + ?VERSION_NUMBER_SIZE_BYTES + ?FILESIZE_SIZE_BYTES,
     case internal_read(Fd,Pos,?CHECKSUM_SIZE_BYTES) of 
         {ok,Digest} -> warp_fd(Fd,Digest);
         Error -> Error 
     end.
 warp_fd(Fd,Digest)->
-    Pos = ?MAGIC_NUMBER_SIZE_BYTES + ?VERSION_NUMBER_SIZE_BYTES + ?CHECKSUM_SIZE_BYTES,
+    Pos = ?MAGIC_NUMBER_SIZE_BYTES + ?VERSION_NUMBER_SIZE_BYTES,
     case internal_read(Fd,Pos,?FILESIZE_SIZE_BYTES) of 
         {ok,SizeBinary} ->
             <<Size:64/big-unsigned-integer>> = SizeBinary,
@@ -173,7 +181,7 @@ writable_close(#ai_blob_file{fd = Fd,size = Size,ctx = Ctx} = Ref)->
     case file:sync(Fd) of   
         ok ->
             Digest = crypto:hash_final(Ctx),
-            Data = <<Digest/binary,Size:64/big-unsigned-integer>>,
+            Data = <<Size:64/big-unsigned-integer,Digest/binary>>,
             Pos = ?MAGIC_NUMBER_SIZE_BYTES + ?VERSION_NUMBER_SIZE_BYTES,
             case internal_write(Fd,Pos,Data) of 
                 ok -> 
@@ -235,14 +243,19 @@ with_check(Filename,Fd,false)->
             Error
     end.
 read_extend_header(_Ref,<<0:8/big-unsigned-integer,_Rest/binary>>)-> {error,not_extend_blob};
-read_extend_header(#ai_blob_file{fd = Fd} = Ref,<<1:8/big-unsigned-integer,Size:8/big-unsigned-integer>>)->
-    Pos = ?EXTEND_HEADER_OFFSET + 2,
+read_extend_header(#ai_blob_file{fd = Fd} = Ref,<<1:8/big-unsigned-integer,
+        Size:8/big-unsigned-integer,Digest/binary>>)->
+    Pos = ?EXTEND_HEADER_OFFSET + 22,
     case internal_read(Fd,Pos,Size) of 
-        {ok,Data} -> {ok,Ref,Data};
+        {ok,Data} -> 
+            case  crypto:hash(sha,Data) of 
+                Digest -> {ok,Ref,Data};
+                _ -> {error,corrupt_extend_header}
+            end;
         Error -> Error
     end.  
 read_extend_header({fd = Fd} = Ref)->
-    case internal_read(Fd,?EXTEND_HEADER_OFFSET,2) of 
+    case internal_read(Fd,?EXTEND_HEADER_OFFSET,22) of 
         {ok,Data}-> read_extend_header(Ref,Data);
         Error -> Error
     end.
