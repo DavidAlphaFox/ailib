@@ -20,7 +20,7 @@ demonitor_process(Pid,Monitors) when erlang:is_pid(Pid)->
             M1 = maps:remove(MRef,Monitors),
             maps:remove(Pid,M1)
     end;
-demonitor_process(MRef,Monitors)->
+demonitor_process(MRef,Monitors) when erlang:is_reference(MRef)->
     erlang:demonitor(MRef),
     case maps:get(MRef,Monitors,undefined) of 
         undefined -> Monitors;
