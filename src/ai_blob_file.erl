@@ -4,7 +4,7 @@
 -export([open_for_read/1,open_for_read/2,read/3]).
 -export([data_range/1,digest/1,data_size/1]).
 -export([read_extend_header/1,write_extend_header/2]).
--export([open_for_read_write/1]).
+-export([open_for_read_write/1,truncate/2]).
 
 -define(MAGIC_NUMBER, <<16#7334:16/big-unsigned-integer>>).
 -define(MAGIC_NUMBER_SIZE_BYTES, 2).
@@ -64,7 +64,7 @@ internal_append(Fd,Data)->
     ai_lists:run_pipe(List).
 write_header(Fd)->
     FillSize = 
-        (?TOTAL_HEADER_SIZE_BYTES - ?MAGIC_NUMBER_SIZE_BYTES - ?VERSION_NUMBER_SIZE_BYTES)*8,
+        (?TOTAL_HEADER_SIZE_BYTES - ?MAGIC_NUMBER_SIZE_BYTES - ?VERSION_NUMBER_SIZE_BYTES) * 8,
     Data = <<?MAGIC_NUMBER/binary,?VERSION_NUMBER/binary,0:FillSize/integer>>,
     internal_write(Fd,0,Data).
 
@@ -247,10 +247,17 @@ read_extend_header(#ai_blob_file{fd = Fd} = Ref,<<1:8/big-unsigned-integer,
             end;
         Error -> Error
     end.  
-read_extend_header({fd = Fd} = Ref)->
-    case internal_read(Fd,?EXTEND_HEADER_OFFSET,22) of 
-        {ok,Data}-> read_extend_header(Ref,Data);
-        Error -> Error
+read_extend_header(#ai_blob_file{fd = Fd,mode = Mode} = Ref)->
+    ReadTask = fun()->
+                    case internal_read(Fd,?EXTEND_HEADER_OFFSET,22) of 
+                        {ok,Data}-> read_extend_header(Ref,Data);
+                        Error -> Error
+                    end
+                end,
+    case Mode of 
+        read -> ReadTask();
+        read_write -> ReadTask();
+        _ -> {error,not_readable_blob}
     end.
 
 read(#ai_blob_file{fd = Fd,mode = Mode} = Ref,Offset, Size) ->
@@ -293,6 +300,16 @@ update_checksum(#ai_blob_file{fd = Fd} = Ref)->
        Error ->
            file:close(Fd),
            Error 
+    end.
+truncate(#ai_blob_file{fd=Fd} = Ref,Offset)->
+    Pos = ?TOTAL_HEADER_SIZE_BYTES + Offset,
+    case bof_seek(Fd,Pos) of 
+        {ok,Pos} -> 
+            case file:truncate(Fd) of 
+                ok -> update_checksum(Ref#ai_blob_file{size = Offset});
+                Error -> Error
+            end;
+        Error -> Error 
     end.
 data_size(#ai_blob_file{size = Size})-> {ok,Size};
 data_size(Filename)->
