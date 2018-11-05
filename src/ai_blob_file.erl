@@ -3,6 +3,7 @@
 -export([open_for_write/1,write/2,close/1]).
 -export([open_for_read/1,open_for_read/2,read/3]).
 -export([data_range/1,digest/1,data_size/1]).
+-export([read_extend_header/1,write_extend_header/2]).
 
 -define(MAGIC_NUMBER, <<16#7334:16/big-unsigned-integer>>).
 -define(MAGIC_NUMBER_SIZE_BYTES, 2).
@@ -16,10 +17,10 @@
 -define(EXTEND_BIT_SIZE_BYTES, 1).
 -define(EXTEND_HEADER_SIZE_BYTES, 1).
 -define(EXTEND_CHECKSUM_SIZE_BYTES, 20).
+-define(EXTEND_HEADER_MAX_SIZE,255).
 
 -define(EXTEND_HEADER_OFFSET,
-    ?MAGIC_NUMBER_SIZE_BYTES + ?VERSION_NUMBER_SIZE_BYTES + ?CHECKSUM_SIZE_BYTES + ?FILESIZE_SIZE_BYTES
-    + ?EXTEND_BIT_SIZE_BYTES + ?EXTEND_HEADER_SIZE_BYTES + ?EXTEND_CHECKSUM_SIZE_BYTES).
+    ?MAGIC_NUMBER_SIZE_BYTES + ?VERSION_NUMBER_SIZE_BYTES + ?CHECKSUM_SIZE_BYTES + ?FILESIZE_SIZE_BYTES).
 
 -define(TOTAL_HEADER_SIZE_BYTES, 1024).
 -define(BLOCK_SIZE_BYTES,64 * 1024).
@@ -142,9 +143,30 @@ write(#ai_blob_file{fd=Fd, size = Size, ctx=Ctx,mode = Mode}=Ref, Data) when is_
             end;
         _ -> {error,not_writable_blob}
     end.
+write_extend_header(#ai_blob_file{mode = write} = Ref,Data)->
+    Size  = erlang:byte_size(Data),
+    if 
+        Size > ?EXTEND_HEADER_MAX_SIZE -> {error,overflow};
+        true -> write_extend_header(Ref,Data,Size)
+    end;
+write_extend_header(#ai_blob_file{mode = read_write} = Ref,Data)->
+    Size  = erlang:byte_size(Data),
+    if 
+        Size > ?EXTEND_HEADER_MAX_SIZE -> {error,overflow};
+        true -> write_extend_header(Ref,Data,Size)
+    end;
+write_extend_header(#ai_blob_file{mode = _} ,_Data)->
+    {error,not_writable_blob}.
 
-close(#ai_blob_file{fd = Fd,size = Size,ctx = Ctx,mode = write} = Ref)->
-    case file:sync(Fd) of
+write_extend_header(#ai_blob_file{fd = Fd} = Ref,Data,Size)->
+    Digest = crypto:hash(sha,Data),
+    Ext = <<1:8/big-unsigned-integer,Size:8/big-unsigned-integer,Digest/binary,Data/binary>>,
+    case internal_write(Fd,?EXTEND_HEADER_OFFSET,Ext) of 
+        ok -> {ok,Ref};
+        Error -> Error 
+    end.
+writable_close(#ai_blob_file{fd = Fd,size = Size,ctx = Ctx} = Ref)->
+    case file:sync(Fd) of   
         ok ->
             Digest = crypto:hash_final(Ctx),
             Data = <<Digest/binary,Size:64/big-unsigned-integer>>,
@@ -160,7 +182,11 @@ close(#ai_blob_file{fd = Fd,size = Size,ctx = Ctx,mode = write} = Ref)->
         Error ->
             file:close(Fd),
             Error
-    end;
+    end.
+close(#ai_blob_file{mode = write} = Ref)->
+    writable_close(Ref);
+close(#ai_blob_file{mode = read_write} = Ref)->
+    writable_close(Ref);
 close(#ai_blob_file{fd=Fd,ctx = Ctx,mode = read} = Ref)->
     case file:close(Fd) of 
         ok -> {ok,Ref#ai_blob_file{fd = undefined,mode = close},Ctx};
@@ -192,14 +218,29 @@ with_check(Fd,false)->
             file:close(Fd),
             Error
     end.
+read_extend_header(_Ref,<<0:8/big-unsigned-integer,_Rest/binary>>)-> {error,not_extend_blob};
+read_extend_header(#ai_blob_file{fd = Fd} = Ref,<<1:8/big-unsigned-integer,Size:8/big-unsigned-integer>>)->
+    Pos = ?EXTEND_HEADER_OFFSET + 2,
+    case internal_read(Fd,Pos,Size) of 
+        {ok,Data} -> {ok,Ref,Data};
+        Error -> Error
+    end.  
+read_extend_header({fd = Fd} = Ref)->
+    case internal_read(Fd,?EXTEND_HEADER_OFFSET,2) of 
+        {ok,Data}-> read_extend_header(Ref,Data);
+        Error -> Error
+    end.
+
+read(Ref,Fd,Offset,Size)->
+    Pos = Offset + ?TOTAL_HEADER_SIZE_BYTES,
+    case internal_read(Fd,Pos,Size) of
+        {ok,Data} -> {ok,Ref,Data};
+        Error -> Error
+    end.
 read(#ai_blob_file{fd = Fd,mode = Mode} = Ref,Offset, Size) ->
     case Mode of 
-        read ->
-            Pos = Offset + ?TOTAL_HEADER_SIZE_BYTES,
-            case internal_read(Fd,Pos,Size) of
-                {ok,Data} -> {ok,Ref,Data};
-                Error -> Error
-            end;
+        read -> read(Ref,Fd,Offset,Size);
+        read_write -> read(Ref,Fd,Offset,Size);
         write -> {error,not_readable_blob}
     end.
 
@@ -207,7 +248,7 @@ read(#ai_blob_file{fd = Fd,mode = Mode} = Ref,Offset, Size) ->
 data_size(#ai_blob_file{size = Size})-> Size;
 data_size(Filename)->
     case ai_file:file_size(Filename) of 
-        {ok,Size} -> Size;
+        {ok,Size} -> Size - ?TOTAL_HEADER_SIZE_BYTES;
         Error -> Error 
     end.
 data_range(#ai_blob_file{size = Size})-> {?TOTAL_HEADER_SIZE_BYTES,Size};
@@ -219,6 +260,7 @@ data_range(Filename) ->
 digest(#ai_blob_file{ctx = Digest,mode = Mode}) ->
     case Mode of 
         write -> {error,not_hava_digest};
+        read_write -> {error,not_hava_digest};
         _ -> {ok,Digest}
     end;
 digest(_Any) -> {error,not_hava_digest}.
