@@ -6,12 +6,21 @@
 
 -define(MAGIC_NUMBER, <<16#7334:16/big-unsigned-integer>>).
 -define(MAGIC_NUMBER_SIZE_BYTES, 2).
--define(VERSION_NUMBER, <<16#1:16/big-unsigned-integer>>).
+
+-define(VERSION_NUMBER, <<16#2:16/big-unsigned-integer>>).
 -define(VERSION_NUMBER_SIZE_BYTES,2).
+
 -define(CHECKSUM_SIZE_BYTES, 20).
 -define(FILESIZE_SIZE_BYTES, 8).
--define(EXTERN_BIT_SIZE_BYTES, 1).
--define(EXTERN_SIZE_BYTES, 1).
+
+-define(EXTEND_BIT_SIZE_BYTES, 1).
+-define(EXTEND_HEADER_SIZE_BYTES, 1).
+-define(EXTEND_CHECKSUM_SIZE_BYTES, 20).
+
+-define(EXTEND_HEADER_OFFSET,
+    ?MAGIC_NUMBER_SIZE_BYTES + ?VERSION_NUMBER_SIZE_BYTES + ?CHECKSUM_SIZE_BYTES + ?FILESIZE_SIZE_BYTES
+    + ?EXTEND_BIT_SIZE_BYTES + ?EXTEND_HEADER_SIZE_BYTES + ?EXTEND_CHECKSUM_SIZE_BYTES).
+
 -define(TOTAL_HEADER_SIZE_BYTES, 1024).
 -define(BLOCK_SIZE_BYTES,64 * 1024).
 
@@ -133,6 +142,7 @@ write(#ai_blob_file{fd=Fd, size = Size, ctx=Ctx,mode = Mode}=Ref, Data) when is_
             end;
         _ -> {error,not_writable_blob}
     end.
+
 close(#ai_blob_file{fd = Fd,size = Size,ctx = Ctx,mode = write} = Ref)->
     case file:sync(Fd) of
         ok ->
