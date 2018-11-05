@@ -147,7 +147,7 @@ write(#ai_blob_file{fd=Fd, size = Size, ctx=Ctx,mode = Mode}=Ref, Data) when is_
     WirteTask = fun()->
             DataSize = erlang:byte_size(Data),
             case internal_append(Fd,Data) of
-                ok -> {ok, Ref#ai_blob_file{ size = Size + DataSize,ctx = crypto:hash_update(Ctx, Data)}};
+                ok -> {ok, Ref#ai_blob_file{ size = Size + DataSize,ctx = crypto:hash_update(Ctx, Data)},DataSize};
                 {error,Reason} -> {error,Reason}
             end
         end,
