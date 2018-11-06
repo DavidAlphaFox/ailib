@@ -172,3 +172,4 @@ format_status(_Opt, Status) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+server_name(CondVar) -> ai_strings:atom_suffix(CondVar,?SUFFIX,true).

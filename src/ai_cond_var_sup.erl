@@ -6,7 +6,7 @@
 %%% @end
 %%% Created : 15 Oct 2018 by David Gao <david@laptop-02.local>
 %%%-------------------------------------------------------------------
--module(ai_cond_sup).
+-module(ai_cond_var_sup).
 
 -behaviour(supervisor).
 
