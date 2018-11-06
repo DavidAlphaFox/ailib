@@ -25,6 +25,7 @@
 
 -record(state, {	
 	waiters :: queue:queue(),
+	waiters_map :: maps:maps(),
 	locker :: undefined | pid(),
 	monitors :: maps:maps()
 }).
@@ -104,7 +105,12 @@ start_link(Name,Opts) ->
 	{stop, Reason :: term()} |
 	ignore.
 init(_Opts) ->
-	{ok, #state{}}.
+	{ok, #state{ 
+		waiters = queue:new(),
+		waiters_map = maps:new(),
+		locker = undefined,
+		monitors = maps:new()
+	}}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -121,6 +127,14 @@ init(_Opts) ->
 	{noreply, NewState :: term(), hibernate} |
 	{stop, Reason :: term(), Reply :: term(), NewState :: term()} |
 	{stop, Reason :: term(), NewState :: term()}.
+handle_call({lock,Caller},_From,#state{locker = undefined} = State)->
+	{Result,NewState} = lock_mutex(Caller,State),
+	{reply,Result,NewState};
+handle_call({lock,Caller},_From,#state{locker = Caller} = State)->
+	{reply,ok,State};
+handle_call({locker,Caller},From,State)->
+    NewState = wait_mutex(Caller,From,State),
+    {noreply,NewState};
 handle_call(_Request, _From, State) ->
 	Reply = ok,
 	{reply, Reply, State}.
@@ -136,6 +150,12 @@ handle_call(_Request, _From, State) ->
 	{noreply, NewState :: term(), Timeout :: timeout()} |
 	{noreply, NewState :: term(), hibernate} |
 	{stop, Reason :: term(), NewState :: term()}.
+handle_cast({release,Caller},#state{locker = Caller} = State)->
+	NewState = release_mutex(Caller,State),
+	{noreply, NewState};
+handle_cast(destroy,#state{waiters = W,locker = L} =State)->
+    NewState = destroy_mutex(queue:to_list(W),L,State),
+    {stop,destroy,NewState#state{waiters = queue:new()}};
 handle_cast(_Request, State) ->
 	{noreply, State}.
 
@@ -150,6 +170,9 @@ handle_cast(_Request, State) ->
 	{noreply, NewState :: term(), Timeout :: timeout()} |
 	{noreply, NewState :: term(), hibernate} |
 	{stop, Reason :: normal | term(), NewState :: term()}.
+handle_info({'DOWN', _MonitorReference, process, Pid,_Reason},State)->
+    NewState = processor_down(Pid,State),
+    {noreply,NewState};
 handle_info(_Info, State) ->
 	{noreply, State}.
 
@@ -197,3 +220,72 @@ format_status(_Opt, Status) ->
 %%% Internal functions
 %%%===================================================================
 server_name(Mutex) -> ai_strings:atom_suffix(Mutex,?SUFFIX,true).
+
+lock_mutex(Caller,#state{monitors = M} =  State)->
+	M2 = ai_process:monitor_process(Caller,M),
+	{ok,State#state{ locker = Caller, monitors = M2}}.
+wait_mutex(Caller,From,#state{waiters = W, waiters_map = WM, monitors = M} = State)->
+	M2 = ai_process:monitor_process(Caller,M),
+	State#state{
+		waiters = queue:in(Caller,W),
+		waiters_map = maps:put(Caller,From,WM),
+		monitors = M2
+	}.
+remove_waiter(Caller,#state{waiters = W,waiters_map = WM,monitors = M} = State)->
+    M2 = ai_process:demonitor_process(Caller,M),
+    State#state{
+        waiters = queue:filter(fun(I)-> I /= Caller end,W),
+        waiters_map = maps:remove(Caller,WM),
+        monitors = M2
+    }.
+
+
+processor_down(Pid,#state{waiters = W,locker = L} = State)->
+    case queue:member(Pid,W) of
+        true -> remove_waiter(Pid,State);
+        _ ->
+			if 
+				L == Pid -> release_mutex(Pid,State);
+				true -> State
+			end 
+	end.
+release_mutex(Caller,#state{waiters = W,monitors = M} = State)->
+	M2 = ai_process:demonitor_process(Caller,M),
+	notify_waiters(W,State#state{locker = undefined,monitors = M2}).
+		
+notify_waiters(Q,State) ->
+	case queue:out(Q) of
+		{{value, Waiter}, Q2}-> notify_waiter(Waiter,Q2,State);
+		{empty,Q} -> State
+	end.
+notify_waiter(Caller,Q2,#state{waiters_map = WM,monitors = M } = State) ->
+	%% 某个进程崩溃信息可能晚于mutex释放的时间
+	case erlang:is_process_alive(Caller) of
+		true ->
+			From = maps:get(Caller,WM),
+			gen_server:reply(From,ok),
+			State#state{
+				waiters = Q2,
+				waiters_map = maps:remove(Caller,WM),
+				locker = Caller
+			};
+		_ ->
+			M2 = ai_process:demonitor(Caller,M),
+			notify_waiters(Q2,State#state{
+								waiters = Q2,
+								waiters_map = maps:remove(Caller,WM),
+								monitors = M2})
+	end.
+
+destroy_mutex(Waiters,Locker,State)->
+	State1 = destroy_waiters(Waiters,State),
+	#state{monitors = M} = State1,
+	M2 = ai_process:demonitor_process(Locker,M),
+	State#state{locker = undefined,monitors = M2}.
+destroy_waiters([],State)-> State;
+destroy_waiters([H|T],#state{waiters_map = WM, monitors = M } = State)->
+	From = maps:get(H,WM),
+	M2 = ai_process:demonitor_process(H,M),
+	gen_server:reply(From,destroy),
+	destroy_waiters(T,State#state{waiters_map = maps:remove(H,WM),monitors = M2}).
+		
