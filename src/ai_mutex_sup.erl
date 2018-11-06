@@ -6,7 +6,7 @@
 %%% @end
 %%% Created : 15 Oct 2018 by David Gao <david@laptop-02.local>
 %%%-------------------------------------------------------------------
--module(ai_semaphore_sup).
+-module(ai_mutex_sup).
 
 -behaviour(supervisor).
 
@@ -15,14 +15,14 @@
 
 %% Supervisor callbacks
 -export([init/1]).
--export([semaphore/1]).
+-export([mutex/1]).
 
 -define(SERVER, ?MODULE).
 
 %%%===================================================================
 %%% API functions
 %%%===================================================================
-semaphore(Opts)->
+mutex(Opts)->
     supervisor:start_child(?SERVER,[Opts]).
 %%--------------------------------------------------------------------
 %% @doc
@@ -59,13 +59,13 @@ init([]) ->
                  intensity => 1,
                  period => 5},
 
-    Semaphore = #{id => ai_semaphore,
-               start => {ai_semaphore, start_link, []},
+    Mutex = #{id => ai_mutex,
+               start => {ai_mutex, start_link, []},
                restart => permanent,
                shutdown => 5000,
                type => worker,
-               modules => [ai_semaphore]},
-    {ok, {SupFlags, [Semaphore]}}.
+               modules => [ai_mutex]},
+    {ok, {SupFlags, [Mutex]}}.
 
 %%%===================================================================
 %%% Internal functions

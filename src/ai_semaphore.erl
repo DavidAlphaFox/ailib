@@ -17,11 +17,11 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
 	terminate/2, code_change/3, format_status/2]).
 
--export([create/1,create/2,destroy/1]).
--export([wait/1]).
--export([release/1]).
--define(SERVER, ?MODULE).
+-export([semaphore/1,semaphore/2,destroy/1]).
+-export([wait/1,release/1]).
 
+-define(SERVER, ?MODULE).
+-define(SUFFIX, "_ai_semaphore").
 
 -record(state, {
     total :: integer(),
@@ -35,14 +35,14 @@
 %%% API 
 %%%===================================================================
 
--spec create(Count :: integer())-> {ok,pid()}.
-create(Count)->
+-spec semaphore(Count :: integer())-> {ok,pid()}.
+semaphore(Count)->
 	Opts = [{avalible,Count}],
-	ai_semaphore_sup:start_server(Opts).
--spec create(Name :: atom(),Count :: integer())-> {ok,pid()}.
-create(Name,Count)->
-    Opts = [{avalible,Count},{name,server_name_new(Name)}],
-    ai_semaphore_sup:start_server(Opts).
+	ai_semaphore_sup:semaphore(Opts).
+-spec semaphore(Name :: atom(),Count :: integer())-> {ok,pid()}.
+semaphore(Name,Count)->
+    Opts = [{avalible,Count},{name,ai_strings:atom_suffix(Name,?SUFFIX,false)}],
+    ai_semaphore_sup:semaphore(Opts).
 -spec destroy(Semaphore :: atom()|pid()) -> ok.
 destroy(Semaphore) when is_pid(Semaphore)->
     gen_server:cast(Semaphore,destroy);
@@ -79,10 +79,8 @@ do_release(Semaphore)->
 start_link(Opts) ->
     Name = proplists:get_value(name,Opts),
     case Name of
-        undefined ->
-            gen_server:start_link(?MODULE, Opts, []);
-        _ ->
-            start_link(Name,proplists:delete(name, Opts))
+        undefined -> gen_server:start_link(?MODULE, Opts, []);
+        _ -> start_link(Name,proplists:delete(name, Opts))
     end.
 
 -spec start_link(Name :: atom(),Opts :: proplists:proplists()) -> {ok, Pid :: pid()} |
@@ -225,7 +223,7 @@ format_status(_Opt, Status) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-
+server_name(Semaphore)-> ai_strings:atom_suffix(Semaphore,?SUFFIX,true).
 destroy_semaphore(Waiters,Lockers,State)->
     State1 = destroy_waiters(Waiters,State),
     destroy_lockers(Lockers,State1).
@@ -304,9 +302,3 @@ notify_waiter({Caller,From},Q2,#state{lockers = L,monitors = M } = State) ->
             M2 = ai_process:demonitor(Caller,M),
             notify_waiters(Q2,State#state{waiters = Q2,monitors = M2})
     end.
-server_name_new(Name)->
-    Lname = erlang:atom_to_list(Name) ++ "_semaphore_server",
-    erlang:list_to_atom(Lname).
-server_name(Name)->
-    Lname = erlang:atom_to_list(Name) ++ "_semaphore_server",
-    erlang:list_to_existing_atom(Lname).

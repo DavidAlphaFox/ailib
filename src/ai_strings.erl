@@ -4,7 +4,7 @@
 -export([to_string/1,to_string/2]).
 -export([hash_to_string/3,md5_string/2,sha_string/2,sha256_string/2,sha512_string/2]).
 -export([prefix/2,find/3,slice/2,slice/3]).
-
+-export([atom_suffix/3]).
 
 -define(ASCII_LIST(CP1,CP2), CP1 < 256, CP2 < 256, CP1 =/= $\r).
 
@@ -34,6 +34,19 @@ hash_to_string(Hash,Len,Case) ->
 	<<S:Len/big-unsigned-integer>> = Hash,
 	FormatStr = hash_format(Len,Case),
 	erlang:list_to_binary(lists:flatten(io_lib:format(FormatStr,[S]))).
+
+-spec atom_suffix(Name :: atom(),Suffix :: string(),Exist :: boolean()) -> atom().
+atom_suffix(Name,Suffix,Exist) when erlang:is_binary(Suffix)->
+    atom_suffix(Name, erlang:binary_to_list(Suffix),Exist);
+atom_suffix(Name,Suffix,Exist)->
+    StrName  = Name ++ Suffix,
+    atom_suffix(StrName,Exist).
+
+atom_suffix(Name,false)-> erlang:list_to_atom(Name);
+atom_suffix(Name,true)->erlang:list_to_existing_atom(Name).
+    
+    
+
 
 -spec prefix(String::unicode:chardata(), Prefix::unicode:chardata()) ->
                     'nomatch' | unicode:chardata().
