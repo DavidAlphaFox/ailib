@@ -118,7 +118,7 @@ clean_all(Ref,Length,true)->
         {ok,NewRef} -> truncate(NewRef,0);
         Error -> Error
     end;
-clean_all(Ref,_Length,false)-> {ok,Ref}.
+clean_all(Ref,Length,false)-> {ok,Ref#ai_resume_file{length = Length}}.
 
 resume(Ref,Etag,LastModified,Length)->
     case {Etag,LastModified} of 
