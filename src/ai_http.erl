@@ -40,5 +40,5 @@ content_range(Headers)->
     case proplists:get_value(?CONTENT_RANGE,H) of 
         undefined -> undefined;
         Range -> 
-            cow_http:parse_content_range(Range)
+            cow_http_hd:parse_content_range(Range)
     end.               
