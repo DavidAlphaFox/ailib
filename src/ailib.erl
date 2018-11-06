@@ -6,4 +6,5 @@
 start() ->
     ok = application:start(crypto),
     ok = application:start(poolboy),
+    ok = application:start(cowlib),
     ok = application:start(ailib).
