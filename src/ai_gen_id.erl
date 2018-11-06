@@ -36,7 +36,7 @@
 start_link(Args)->
 	Partition = proplists:get_value(partition,Args,0),
 	Name = proplists:get_value(name,Args,?MODULE),
-  gen_server:start_link({local,Name},?MODULE,Partition,[]).
+    gen_server:start_link({local,Name},?MODULE,Partition,[]).
 
 %%%
 %%% API
@@ -55,7 +55,7 @@ init(Partition)->
     TS = stamp(),
 		PartitionBinary = <<Partition:10/integer-unsigned>>,
 		{ok,#state{
-								partition = PartitionBinary,
+				partition = PartitionBinary,
                 sequence = 0,
                 last_timestamp = TS}}.
 
@@ -110,5 +110,5 @@ try_next_seq(Time, Seq) ->
 
 next_id(Millis, Partition, Seq) ->
     <<Integer:64/big-unsigned-integer>> = <<0:1, Millis:41/integer-unsigned,
-                               						Partition:10/bits, Seq:12/integer-unsigned>>,
+                               				Partition:10/bits, Seq:12/integer-unsigned>>,
     Integer.
