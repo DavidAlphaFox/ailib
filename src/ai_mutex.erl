@@ -131,7 +131,7 @@ handle_call({lock,Caller},_From,#state{locker = undefined} = State)->
 	{Result,NewState} = lock_mutex(Caller,State),
 	{reply,Result,NewState};
 handle_call({lock,Caller},_From,#state{locker = Caller} = State)->
-	{reply,ok,State};
+	{reply,{error,already_lock},State};
 handle_call({locker,Caller},From,State)->
     NewState = wait_mutex(Caller,From,State),
     {noreply,NewState};
