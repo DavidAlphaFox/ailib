@@ -24,9 +24,10 @@
 
 
 -record(state, {
-  total :: integer(),
-  avalible :: integer(),
+    total :: integer(),
+    avalible :: integer(),
 	waiters :: queue:queue(),
+    lockers :: list(),
 	monitors :: maps:maps()
 }).
 
@@ -108,9 +109,10 @@ start_link(Name,Opts) ->
 init(Opts) ->
 	Avalible = proplists:get_value(avalible,Opts),
 	{ok, #state{
-    total = Avalible,
-    avalible = Avalible,
-		waiters = queue:new(),
+        total = Avalible,
+        avalible = Avalible,
+        waiters = queue:new(),
+        lockers = [],
 		monitors = maps:new()
 	}}.
 
@@ -130,11 +132,11 @@ init(Opts) ->
 	{stop, Reason :: term(), Reply :: term(), NewState :: term()} |
 	{stop, Reason :: term(), NewState :: term()}.
 handle_call({waiter,Caller},From,#state{avalible = 0} = State)->
-    NewState = add_waiter(Caller,From,State),
+    NewState = wait_semaphore(Caller,From,State),
     {noreply,NewState};
 handle_call({wait,Caller},_From,State)->
-		NewState = lock_semaphore(Caller,State),
-    {reply,ok,NewState};
+    {Result,NewState} = lock_semaphore(Caller,State),
+    {reply,Result,NewState};
 handle_call(_Request, _From, State) ->
 	Reply = ok,
 	{reply, Reply, State}.
@@ -150,18 +152,16 @@ handle_call(_Request, _From, State) ->
 	{noreply, NewState :: term(), Timeout :: timeout()} |
 	{noreply, NewState :: term(), hibernate} |
 	{stop, Reason :: term(), NewState :: term()}.
-handle_cast({release,Caller},#state{monitors = M} = State)->
-    case maps:get(Caller,M,undefined) of
-        undefined ->
-            {noreply,State};
-        MRef ->
-            demonitor_process(MRef),
-            NewState = release_semaphore(State#state{monitors = maps:remove(Caller,M)}),
-            {noreply,NewState}
-    end;
-handle_cast(destroy,#state{monitors = M} = State)->
-    demonitor_loop(maps:iterator(M)),
-    {stop,destroy,State#state{waiters = queue:new(),monitors = maps:new()}};
+handle_cast({release,Caller},#state{lockers = L} = State)->
+    NewState = 
+        case lists:member(Caller,L) of
+            false -> State;
+            true -> release_semaphore(Caller,State)
+        end,
+    {noreply,NewState};
+handle_cast(destroy,#state{waiters = W,lockers = L} =State)->
+    NewState = destroy_semaphore(queue:to_list(W),L,State),
+    {stop,destroy,NewState#state{waiters = queue:new(),lockers = []}};
 handle_cast(_Request, State) ->
 	{noreply, State}.
 
@@ -176,14 +176,9 @@ handle_cast(_Request, State) ->
 	{noreply, NewState :: term(), Timeout :: timeout()} |
 	{noreply, NewState :: term(), hibernate} |
 	{stop, Reason :: normal | term(), NewState :: term()}.
-handle_info({'DOWN', _MonitorReference, process, Pid,_Reason},#state{monitors = M} = State)->
-    case maps:get(Pid,M,undefined) of
-        undefined ->
-            {noreply,State};
-        MRef ->
-            NewState = processor_down(MRef,Pid,State),
-            {noreply,NewState}
-    end;
+handle_info({'DOWN', _MonitorReference, process, Pid,_Reason},State)->
+    NewState = processor_down(Pid,State),
+    {noreply,NewState};
 handle_info(_Info, State) ->
 	{noreply, State}.
 
@@ -231,48 +226,65 @@ format_status(_Opt, Status) ->
 %%% Internal functions
 %%%===================================================================
 
-demonitor_loop({_Key, Value, NextIterator})->
-    demonitor_process(Value),
-    demonitor_loop(maps:next(NextIterator));
-demonitor_loop(none) -> ok.
+destroy_semaphore(Waiters,Lockers,State)->
+    State1 = destroy_waiters(Waiters,State),
+    destroy_lockers(Lockers,State1).
+destroy_waiters([],State)-> State;
+destroy_waiters([H|T],#state{monitors = M } = State)->
+    {Caller,From} = H,
+    M2 = ai_process:demonitor_process(Caller,M),
+    gen_server:reply(From,destroy),
+    destroy_waiters(T,State#state{monitors = M2}).
 
-demonitor_process(undefined) -> true;
-demonitor_process(MRef) -> erlang:demonitor(MRef).
- 
-add_waiter(Caller,From,#state{waiters = W,monitors = M } = State)->
-    MRef = erlang:monitor(process,Caller),
-    State#state{
-      waiters = queue:in({Caller,From},W),
-      monitors = maps:put(Caller,MRef,M)
-     }.
-remove_waiter(Caller,#state{waiters = W} = State)->
-    State#state{
-      waiters = queue:filter(fun(I)-> I /= Caller end,W)
-     }.
+destroy_lockers([],State) -> State;
+destroy_lockers([H|T],#state{monitors = M }  = State)->
+    M2 = ai_process:demonitor_process(H,M),
+    destroy_lockers(T,State#state{monitors = M2}).
 
-lock_semaphore(Caller,#state{avalible = Avalible,monitors = M} = State)->
-    MRef = erlang:monitor(process,Caller),
+wait_semaphore(Caller,From,#state{waiters = W,monitors = M } = State)->
+    M2 = ai_process:monitor_process(Caller,M),
     State#state{
-      avalible = Avalible - 1,
-      monitors = maps:put(Caller,MRef,M)
-     }.
+        waiters = queue:in({Caller,From},W),
+        monitors = M2
+    }.
+remove_waiter(Caller,#state{waiters = W,monitors = M} = State)->
+    M2 = ai_process:demonitor_process(Caller,M),
+    State#state{
+        waiters = queue:filter(fun(I)-> I /= Caller end,W),
+        monitors = M2
+    }.
 
-processor_down(MRef,Pid,#state{waiters = W,monitors = M} = State)->
-    demonitor_process(MRef),
-    case queue:member(Pid,W) of
-        true ->
-            remove_waiter(Pid,State#state{monitors = maps:remove(Pid,M)});
-        _ ->
-            release_semaphore(State#state{monitors = maps:remove(Pid,M)})
+lock_semaphore(Caller,#state{avalible = Avalible,lockers = L, monitors = M} = State)->
+    case lists:member(Caller,L) of
+        false ->
+            M2 = ai_process:monitor_process(Caller,M),
+            {ok,State#state{
+                avalible = Avalible - 1,
+                lockers = [Caller | L],
+                monitors = M2
+            }};
+        true -> {{error,already_lock},State}
     end.
 
 
-release_semaphore(#state{total = Total,avalible = Avalible,waiters = W} = State)->
+processor_down(Pid,#state{waiters = W,lockers = L} = State)->
+    case queue:member(Pid,W) of
+        true -> remove_waiter(Pid,State);
+        _ ->
+            case lists:member(Pid,L) of 
+                true -> release_semaphore(Pid,State);
+                false -> State
+            end
+    end.
+
+
+release_semaphore(Caller,#state{total = Total,avalible = Avalible,waiters = W,
+                        lockers = L,monitors = M} = State)->
+    M2 = ai_process:demonitor_process(Caller,M),
+    L2 = lists:filter(fun(I)-> I /= Caller end,L),
     if 
-        Total - Avalible > 0 ->
-            notify_waiters(W,State);
-        true ->
-            State
+        Total - Avalible > 0 -> notify_waiters(W,State#state{lockers = L2 , monitors = M2});
+        true -> State
     end.
 
 notify_waiters(Q,State) ->
@@ -282,15 +294,15 @@ notify_waiters(Q,State) ->
         {empty,Q} ->
             State#state{avalible = State#state.avalible + 1}
     end.
-notify_waiter({Caller,From},Q2,#state{monitors = M } = State) ->
+notify_waiter({Caller,From},Q2,#state{lockers = L,monitors = M } = State) ->
+    %% 某个进程崩溃信息可能晚于semaphore释放的时间
     case erlang:is_process_alive(Caller) of
         true ->
             gen_server:reply(From,ok),
-            State#state{waiters = Q2};
+            State#state{waiters = Q2,lockers = [Caller|L]};
         _ ->
-            MRef = maps:get(Caller,M,undefined),
-            demonitor_process(MRef),
-            notify_waiters(Q2,State#state{waiters = Q2,monitors = maps:remove(Caller,M)})
+            M2 = ai_process:demonitor(Caller,M),
+            notify_waiters(Q2,State#state{waiters = Q2,monitors = M2})
     end.
 server_name_new(Name)->
     Lname = erlang:atom_to_list(Name) ++ "_semaphore_server",
