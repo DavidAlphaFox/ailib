@@ -6,36 +6,63 @@
 %%% @end
 %%% Created :  6 Nov 2018 by  <david@laptop-02.local>
 %%%-------------------------------------------------------------------
--module(ai_cond).
+-module(ai_cond_var).
 
 -behaviour(gen_server).
 
 %% API
--export([start_link/0]).
+-export([start_link/1]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
 	terminate/2, code_change/3, format_status/2]).
 
--define(SERVER, ?MODULE).
+-export([cond_var/0,cond_var/1,destroy/1]).
 
+-define(SERVER, ?MODULE).
+-define(SUFFIX, "_ai_cond_var").
 -record(state, {}).
 
 %%%===================================================================
 %%% API
 %%%===================================================================
+-spec cond_var()-> {ok,pid()}.
+cond_var()->
+	Opts = [],
+	ai_cond_var_sup:mutex(Opts).
+-spec cond_var(Name :: atom())-> {ok,pid()}.
+cond_var(Name)->
+    Opts = [{name,ai_strings:atom_suffix(Name,?SUFFIX,false)}],
+    ai_cond_var_sup:mutex(Opts).
 
+-spec destroy(CondVar :: atom()|pid()) -> ok.
+destroy(CondVar) when is_pid(CondVar)->
+    gen_server:cast(CondVar,destroy);
+destroy(CondVar) ->
+	gen_server:cast(server_name(CondVar),destroy).
 %%--------------------------------------------------------------------
 %% @doc
 %% Starts the server
 %% @end
 %%--------------------------------------------------------------------
--spec start_link() -> {ok, Pid :: pid()} |
+-spec start_link(Opts :: proplists:proplists()) -> {ok, Pid :: pid()} |
 	{error, Error :: {already_started, pid()}} |
 	{error, Error :: term()} |
 	ignore.
-start_link() ->
-	gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
+start_link(Opts) ->
+    Name = proplists:get_value(name,Opts),
+    case Name of
+        undefined -> gen_server:start_link(?MODULE, Opts, []);
+        _ -> start_link(Name,proplists:delete(name, Opts))
+    end.
+
+-spec start_link(Name :: atom(),Opts :: proplists:proplists()) -> {ok, Pid :: pid()} |
+											{error, Error :: {already_started, pid()}} |
+											{error, Error :: term()} |
+											ignore.
+start_link(Name,Opts) ->
+	gen_server:start_link({local,Name}, ?MODULE, Opts, []).
+
 
 %%%===================================================================
 %%% gen_server callbacks
@@ -47,13 +74,12 @@ start_link() ->
 %% Initializes the server
 %% @end
 %%--------------------------------------------------------------------
--spec init(Args :: term()) -> {ok, State :: term()} |
+-spec init(Opts :: term()) -> {ok, State :: term()} |
 	{ok, State :: term(), Timeout :: timeout()} |
 	{ok, State :: term(), hibernate} |
 	{stop, Reason :: term()} |
 	ignore.
-init([]) ->
-	process_flag(trap_exit, true),
+init(_Opts) ->
 	{ok, #state{}}.
 
 %%--------------------------------------------------------------------
