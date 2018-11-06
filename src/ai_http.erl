@@ -1,6 +1,6 @@
 -module(ai_http).
 -export([content_length/1,etag/1,last_modified/1]).
--export([accept_ranges/1,content_range/1]).
+-export([accept_ranges/1,content_range/1,range/1]).
 
 -define(CONTENT_LENGTH,<<"content-length">>).
 -define(ETAG,<<"etag">>).
@@ -39,6 +39,13 @@ content_range(Headers)->
     H = headers(Headers),
     case proplists:get_value(?CONTENT_RANGE,H) of 
         undefined -> undefined;
-        Range -> 
-            cow_http_hd:parse_content_range(Range)
+        ContentRange -> 
+            cow_http_hd:parse_content_range(ContentRange)
     end.               
+range(Headers)->
+    H = headers(Headers),
+    case proplists:get_value(?RANGE,H) of 
+        undefined -> undefined;
+        Range ->
+            cow_http_hd:parse_range(Range)
+    end.
