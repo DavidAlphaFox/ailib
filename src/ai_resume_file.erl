@@ -2,7 +2,7 @@
 %% resume file is a special case of blob
 %% a file download from internet which can be used for http range transfer
 
--export([open/1,write/2,close/1,read/3,resume/4]).
+-export([open/1,write/2,close/1,read/3,resume/4,reset/4]).
 
 -export([file_length/1,received/1,etag/1,last_modified/1]).
 
@@ -113,23 +113,27 @@ truncate(#ai_resume_file{fd = Fd} = Ref,Received)->
             ai_blob_file:close(Fd),
             Error 
     end.
-clean_all(Ref,Length,true)->
+
+clean(Ref,Length,true)->
     case persist_header(Ref#ai_resume_file{received = 0,length = Length}) of 
         {ok,NewRef} -> truncate(NewRef,0);
         Error -> Error
     end;
-clean_all(Ref,Length,false)-> {ok,Ref#ai_resume_file{length = Length}}.
+clean(Ref,Length,false)-> {ok,Ref#ai_resume_file{length = Length}}.
+
+reset(Ref,Etag,LastModified,Length)->
+    clean(Ref#ai_resume_file{etag = Etag,last_modified = LastModified},Length,true).
 
 resume(Ref,Etag,LastModified,Length)->
     case {Etag,LastModified} of 
-        {undefined,undefined} -> clean_all(Ref,Length,true);
+        {undefined,undefined} -> clean(Ref,Length,true);
         {undefined,_} ->
             R = Ref#ai_resume_file.last_modified == LastModified,
-            clean_all(Ref,Length,R);
+            clean(Ref,Length,R);
         {_,undefined}->
             R = Ref#ai_resume_file.etag == Etag,
-            clean_all(Ref,Length,R);
+            clean(Ref,Length,R);
         {_,_}->
             R = (Ref#ai_resume_file.etag == Etag) and (Ref#ai_resume_file.last_modified == LastModified),
-            clean_all(Ref,Length,R)
+            clean(Ref,Length,R)
     end. 

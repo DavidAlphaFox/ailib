@@ -9,6 +9,7 @@
 -define(CONTENT_RANGE,<<"Content-Range">>).
 -define(BYTES,<<"bytes">>).
 -define(NONE,<<"none">>).
+-define(RANGE,<<"range">>).
 
 headers(H) when erlang:is_map(H) -> maps:to_list();
 headers(H) -> H.
