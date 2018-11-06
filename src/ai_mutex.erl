@@ -18,7 +18,7 @@
 	terminate/2, code_change/3, format_status/2]).
 
 -export([mutex/0,mutex/1,destroy/1]).
--export([lock/1,release/1]).
+-export([lock/1,release/1,cond_release/2]).
 
 -define(SUFFIX, "_ai_mutex").
 -define(SERVER, ?MODULE).
@@ -59,13 +59,20 @@ do_lock(Mutex)->
 
 -spec release(Mutex :: atom() | pid()) -> ok.
 release(Mutex) when erlang:is_pid(Mutex)->
-    do_release(Mutex);
-release(Mutex) ->
-    do_release(server_name(Mutex)).
--spec do_release(Mutex :: atom() | pid()) -> ok.
-do_release(Mutex)->
 	Caller = self(),
+    do_release(Mutex,Caller);
+release(Mutex) ->
+	Caller = self(),
+    do_release(server_name(Mutex),Caller).
+-spec do_release(Mutex :: atom() | pid(),Caller :: pid()) -> ok.
+do_release(Mutex,Caller)->
 	gen_server:cast(Mutex,{release,Caller}).
+-spec cond_release(Mutex :: atom() | pid(),Locker :: pid()) -> ok.
+cond_release(Mutex,Locker) when erlang:is_pid(Mutex)->
+	do_release(Mutex,Locker);
+cond_release(Mutex,Locker)->
+	do_release(server_name(Mutex),Locker).
+
 %%--------------------------------------------------------------------
 %% @doc
 %% Starts the server
