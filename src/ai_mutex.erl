@@ -2,12 +2,12 @@
 %%% @author  <david@laptop-02.local>
 %%% @copyright (C) 2018, 
 %%% @doc
-%%%
+%%% this module behavior is similiar with mutex of posix 
+%%% but it doesn't support recursive mutex
 %%% @end
 %%% Created :  6 Nov 2018 by  <david@laptop-02.local>
 %%%-------------------------------------------------------------------
 -module(ai_mutex).
-
 -behaviour(gen_server).
 
 %% API
@@ -19,7 +19,6 @@
 
 -export([mutex/0,mutex/1,destroy/1]).
 -export([try_lock/1,lock/1,release/1]).
--export([cond_lock/2,cond_release/2]).
 
 -define(SUFFIX, "_ai_mutex").
 -define(SERVER, ?MODULE).
@@ -79,24 +78,6 @@ release(Mutex) ->
 do_release(Mutex)->
 	Caller = self(),
 	gen_server:cast(Mutex,{release,Caller}).
--spec cond_release(Mutex :: atom() | pid(),Locker :: pid()) -> ok.
-cond_release(Mutex,Locker) when erlang:is_pid(Mutex)->
-	do_cond_release(Mutex,Locker);
-cond_release(Mutex,Locker)->
-	do_cond_release(server_name(Mutex),Locker).
--spec do_cond_release(Mutex :: atom() | pid(),Locker :: pid()) -> ok.
-do_cond_release(Mutex,Locker)->
-	gen_server:call(Mutex,{cond_release,Locker},infinity).
--spec cond_lock(Mutex :: atom()| pid(),Locker :: pid())-> ok | destroy.
-cond_lock(Mutex,Locker) when erlang:is_pid(Mutex) ->
-	do_cond_lock(Mutex,Locker);
-cond_lock(Mutex,Locker) ->
-	do_cond_lock(server_name(Mutex),Locker).
--spec do_cond_lock(Mutex :: atom() | pid(), Locker :: pid())-> ok | destroy.
-do_cond_lock(Mutex,Locker)->
-	Caller = self(),
-	gen_server:call(Mutex,{cond_lock,Caller,Locker},infinity).
-
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -165,7 +146,7 @@ handle_call({lock,Caller},_From,#state{locker = undefined} = State)->
 handle_call({lock,Caller},_From,#state{locker = Caller} = State)->
 	{reply,{error,already_lock},State};
 handle_call({lock,Caller},From,State)->
-    NewState = wait_mutex(Caller,{lock,From},State),
+    NewState = wait_mutex(Caller,From,State),
 	{noreply,NewState};
 handle_call({try_lock,Caller},_From,#state{locker = undefined} = State)->
 	{Result,NewState} = lock_mutex(Caller,State),
@@ -175,23 +156,10 @@ handle_call({try_lock,Caller},_From,#state{locker = L } = State)->
 		L == Caller -> {reply,{error,already_lock},State};
 		true -> {reply,{error,locked},State}
 	end;
-handle_call({cond_lock,Caller,Locker},From,#state{locker = L } = State)->
-	case L of 
-		Locker -> {reply,{error,already_lock},State};
-		undefined -> 
-			{Result,NewState} = lock_mutex(Locker,State),
-			{reply,Result,NewState};
-		_ ->
-			NewState = wait_mutex(Locker,{cond_lock,Caller,From},State),
-			{noreply,NewState}
-	end;
-handle_call({cond_release,Locker},_From,#state{locker = L } = State)->
-	if 
-		L == Locker -> 
-			NewState = release_mutex(Locker,State),
-			{reply,ok,NewState};
-		true ->
-			{reply,{error,locked},State}
+handle_call({is_locker,Caller},_From,#state{locker = L } = State)->
+	if
+		L == Caller -> {reply,true,State};
+		true -> {reply,{error,locked},State}
 	end;
 handle_call(_Request, _From, State) ->
 	Reply = ok,
@@ -291,8 +259,6 @@ wait_mutex(Locker,From,#state{waiters = W, waiters_map = WM, monitors = M} = Sta
 	}.
 remove_waiter(Locker,#state{waiters = W,waiters_map = WM,monitors = M} = State)->
 	M2 = ai_process:demonitor_process(Locker,M),
-	From= maps:get(Locker,WM),
-	reply(From,{error,locker_down},true),
     State#state{
         waiters = queue:filter(fun(I)-> I /= Locker end,W),
         waiters_map = maps:remove(Locker,WM),
@@ -323,7 +289,7 @@ notify_waiter(Caller,Q2,#state{waiters_map = WM,monitors = M } = State) ->
 	case erlang:is_process_alive(Caller) of
 		true ->
 			From = maps:get(Caller,WM),
-			reply(From,ok,false),
+			gen_server:reply(From,ok),
 			State#state{
 				waiters = Q2,
 				waiters_map = maps:remove(Caller,WM),
@@ -331,8 +297,6 @@ notify_waiter(Caller,Q2,#state{waiters_map = WM,monitors = M } = State) ->
 			};
 		_ ->
 			M2 = ai_process:demonitor(Caller,M),
-			From = maps:get(Caller,WM),
-			reply(From,{error,locker_down},true),
 			notify_waiters(Q2,State#state{
 								waiters = Q2,
 								waiters_map = maps:remove(Caller,WM),
@@ -348,16 +312,5 @@ destroy_waiters([],State)-> State;
 destroy_waiters([H|T],#state{waiters_map = WM, monitors = M } = State)->
 	From = maps:get(H,WM),
 	M2 = ai_process:demonitor_process(H,M),
-	reply(From,ok,destroy),
+	gen_server:reply(From,destroy),
 	destroy_waiters(T,State#state{waiters_map = maps:remove(H,WM),monitors = M2}).
-		
-reply({lock,From},Msg,Cond)->
-	case Cond of 
-		true -> ok;
-		_->gen_server:reply(From,Msg)
-	end;
-reply({cond_lock,Caller,From},Msg,_Cond)->
-	case erlang:is_process_alive(Caller) of 
-		true -> gen_server:reply(From,Msg);
-		false -> ok 
-	end.
