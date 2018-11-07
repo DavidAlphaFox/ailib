@@ -94,7 +94,8 @@ cond_lock(Mutex,Locker) ->
 	do_cond_lock(server_name(Mutex),Locker).
 -spec do_cond_lock(Mutex :: atom() | pid(), Locker :: pid())-> ok | destroy.
 do_cond_lock(Mutex,Locker)->
-	gen_server:call(Mutex,{cond_lock,Locker},infinity).
+	Caller = self(),
+	gen_server:call(Mutex,{cond_lock,Caller,Locker},infinity).
 
 
 %%--------------------------------------------------------------------
@@ -174,14 +175,14 @@ handle_call({try_lock,Caller},_From,#state{locker = L } = State)->
 		L == Caller -> {reply,{error,already_lock},State};
 		true -> {reply,{error,locked},State}
 	end;
-handle_call({cond_lock,Locker},From,#state{locker = L } = State)->
+handle_call({cond_lock,Caller,Locker},From,#state{locker = L } = State)->
 	case L of 
 		Locker -> {reply,{error,already_lock},State};
 		undefined -> 
 			{Result,NewState} = lock_mutex(Locker,State),
 			{reply,Result,NewState};
 		_ ->
-			NewState = wait_mutex(Locker,{cond_lock,From},State),
+			NewState = wait_mutex(Locker,{cond_lock,Caller,From},State),
 			{noreply,NewState}
 	end;
 handle_call({cond_release,Locker},_From,#state{locker = L } = State)->
@@ -290,11 +291,8 @@ wait_mutex(Locker,From,#state{waiters = W, waiters_map = WM, monitors = M} = Sta
 	}.
 remove_waiter(Locker,#state{waiters = W,waiters_map = WM,monitors = M} = State)->
 	M2 = ai_process:demonitor_process(Locker,M),
-	{T,From} = maps:get(Locker,WM),
-	case T of 
-		lock -> ok;
-		cond_lok -> gen_server:reply(From,{error,locker_down})
-	end,
+	From= maps:get(Locker,WM),
+	reply(From,{error,locker_down},true),
     State#state{
         waiters = queue:filter(fun(I)-> I /= Locker end,W),
         waiters_map = maps:remove(Locker,WM),
@@ -324,8 +322,8 @@ notify_waiter(Caller,Q2,#state{waiters_map = WM,monitors = M } = State) ->
 	%% 某个进程崩溃信息可能晚于mutex释放的时间
 	case erlang:is_process_alive(Caller) of
 		true ->
-			{_T,From} = maps:get(Caller,WM),
-			gen_server:reply(From,ok),
+			From = maps:get(Caller,WM),
+			reply(From,ok,false),
 			State#state{
 				waiters = Q2,
 				waiters_map = maps:remove(Caller,WM),
@@ -333,11 +331,8 @@ notify_waiter(Caller,Q2,#state{waiters_map = WM,monitors = M } = State) ->
 			};
 		_ ->
 			M2 = ai_process:demonitor(Caller,M),
-			{T,From} = maps:get(Caller,WM),
-			case T of 
-				lock -> ok;
-				cond_lock -> gen_server:reply(From,{error,locker_down})
-			end,
+			From = maps:get(Caller,WM),
+			reply(From,{error,locker_down},true),
 			notify_waiters(Q2,State#state{
 								waiters = Q2,
 								waiters_map = maps:remove(Caller,WM),
@@ -351,8 +346,18 @@ destroy_mutex(Waiters,Locker,State)->
 	State#state{locker = undefined,monitors = M2}.
 destroy_waiters([],State)-> State;
 destroy_waiters([H|T],#state{waiters_map = WM, monitors = M } = State)->
-	{_T,From} = maps:get(H,WM),
+	From = maps:get(H,WM),
 	M2 = ai_process:demonitor_process(H,M),
-	gen_server:reply(From,destroy),
+	reply(From,ok,destroy),
 	destroy_waiters(T,State#state{waiters_map = maps:remove(H,WM),monitors = M2}).
 		
+reply({lock,From},Msg,Cond)->
+	case Cond of 
+		true -> ok;
+		_->gen_server:reply(From,Msg)
+	end;
+reply({cond_lock,Caller,From},Msg,_Cond)->
+	case erlang:is_process_alive(Caller) of 
+		true -> gen_server:reply(From,Msg);
+		false -> ok 
+	end.

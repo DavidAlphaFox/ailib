@@ -21,7 +21,11 @@
 
 -define(SERVER, ?MODULE).
 -define(SUFFIX, "_ai_cond_var").
--record(state, {}).
+-record(state, {
+	waiters :: queue:queue(),
+	waiters_map :: maps:maps(),
+	monitors :: maps:maps()
+}).
 
 %%%===================================================================
 %%% API
@@ -112,6 +116,7 @@ handle_call(_Request, _From, State) ->
 	{noreply, NewState :: term(), Timeout :: timeout()} |
 	{noreply, NewState :: term(), hibernate} |
 	{stop, Reason :: term(), NewState :: term()}.
+
 handle_cast(_Request, State) ->
 	{noreply, State}.
 
