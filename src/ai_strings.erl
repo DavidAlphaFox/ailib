@@ -5,8 +5,18 @@
 -export([hash_to_string/3,md5_string/2,sha_string/2,sha256_string/2,sha512_string/2]).
 -export([prefix/2,find/3,slice/2,slice/3]).
 -export([atom_suffix/3]).
+-export([dynamic_module/2]).
 
 -define(ASCII_LIST(CP1,CP2), CP1 < 256, CP2 < 256, CP1 =/= $\r).
+
+
+
+
+-spec dynamic_module(Name :: list(),Content :: list())->  {module,  atom()} | {error, term()}.
+dynamic_module(Name,Content)->
+    {Mod, Code} = dynamic_compile:from_string(Content),
+    code:load_binary(Mod, Name, Code).
+
 
 to_string(Val) when is_integer(Val) -> erlang:integer_to_binary(Val);
 to_string(Val) when is_float(Val) -> erlang:list_to_binary(io_lib:format("~.2f", [Val]));
