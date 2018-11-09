@@ -18,7 +18,7 @@
 	terminate/2, code_change/3, format_status/2]).
 
 -export([mutex/0,mutex/1,destroy/1]).
--export([try_lock/1,lock/1,release/1]).
+-export([try_lock/1,lock/1,unlock/1]).
 
 -define(SUFFIX, "_ai_mutex").
 -define(SERVER, ?MODULE).
@@ -69,15 +69,15 @@ do_try_lock(Mutex)->
 	Caller = self(),
 	gen_server:call(Mutex,{try_lock,Caller}).
 
--spec release(Mutex :: atom() | pid()) -> ok.
-release(Mutex) when erlang:is_pid(Mutex)->
-    do_release(Mutex);
-release(Mutex) ->
-    do_release(server_name(Mutex)).
--spec do_release(Mutex :: atom() | pid()) -> ok.
-do_release(Mutex)->
+-spec unlock(Mutex :: atom() | pid()) -> ok.
+unlock(Mutex) when erlang:is_pid(Mutex)->
+    do_unlock(Mutex);
+unlock(Mutex) ->
+    do_unlock(server_name(Mutex)).
+-spec do_unlock(Mutex :: atom() | pid()) -> ok.
+do_unlock(Mutex)->
 	Caller = self(),
-	gen_server:cast(Mutex,{release,Caller}).
+	gen_server:cast(Mutex,{unlock,Caller}).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -176,8 +176,8 @@ handle_call(_Request, _From, State) ->
 	{noreply, NewState :: term(), Timeout :: timeout()} |
 	{noreply, NewState :: term(), hibernate} |
 	{stop, Reason :: term(), NewState :: term()}.
-handle_cast({release,Caller},#state{locker = Caller} = State)->
-	NewState = release_mutex(Caller,State),
+handle_cast({unlock,Caller},#state{locker = Caller} = State)->
+	NewState = unlock_mutex(Caller,State),
 	{noreply, NewState};
 handle_cast(destroy,#state{waiters = W,locker = L} =State)->
     NewState = destroy_mutex(queue:to_list(W),L,State),
@@ -271,11 +271,11 @@ processor_down(Pid,#state{waiters = W,locker = L} = State)->
         true -> remove_waiter(Pid,State);
         _ ->
 			if 
-				L == Pid -> release_mutex(Pid,State);
+				L == Pid -> unlock_mutex(Pid,State);
 				true -> State
 			end 
 	end.
-release_mutex(Locker,#state{waiters = W,monitors = M} = State)->
+unlock_mutex(Locker,#state{waiters = W,monitors = M} = State)->
 	M2 = ai_process:demonitor_process(Locker,M),
 	notify_waiters(W,State#state{locker = undefined,monitors = M2}).
 		
