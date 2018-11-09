@@ -19,5 +19,5 @@ cancel_timer(#ai_timer{current = Ref})->
        true -> erlang:cancel_timer(Ref)
     end,
     #ai_timer{prev = Ref,current = undefined}.
-is_canceled(Ref,#ai_timer{prev = Ref}) -> true;
-is_canceled(_Ref,_Timer) -> false.
+is_canceled(Ref,#ai_timer{current = Ref}) -> false;
+is_canceled(_Ref,_Timer) -> true.
