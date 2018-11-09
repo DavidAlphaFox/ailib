@@ -17,7 +17,7 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
 	terminate/2, code_change/3, format_status/2]).
 
--export([mutex/0,mutex/1,destroy/1]).
+-export([new/0,new/1,destroy/1]).
 -export([try_lock/1,lock/1,unlock/1]).
 
 -define(SUFFIX, "_ai_mutex").
@@ -33,14 +33,14 @@
 %%%===================================================================
 %%% API
 %%%===================================================================
--spec mutex()-> {ok,pid()}.
-mutex()->
+-spec new()-> {ok,pid()}.
+new()->
 	Opts = [],
-	ai_mutex_sup:mutex(Opts).
--spec mutex(Name :: atom())-> {ok,pid()}.
-mutex(Name)->
+	ai_mutex_sup:new(Opts).
+-spec new(Name :: atom())-> {ok,pid()}.
+new(Name)->
     Opts = [{name,ai_strings:atom_suffix(Name,?SUFFIX,false)}],
-    ai_mutex_sup:mutex(Opts).
+    ai_mutex_sup:new(Opts).
 -spec destroy(Mutex :: atom()|pid()) -> ok.
 destroy(Mutex) when is_pid(Mutex)->
     gen_server:cast(Mutex,destroy);

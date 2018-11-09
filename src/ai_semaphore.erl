@@ -17,7 +17,7 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
 	terminate/2, code_change/3, format_status/2]).
 
--export([semaphore/1,semaphore/2,destroy/1]).
+-export([new/1,new/2,destroy/1]).
 -export([wait/1,release/1]).
 
 -define(SERVER, ?MODULE).
@@ -36,14 +36,14 @@
 %%% API 
 %%%===================================================================
 
--spec semaphore(Count :: integer())-> {ok,pid()}.
-semaphore(Count)->
+-spec new(Count :: integer())-> {ok,pid()}.
+new(Count)->
 	Opts = [{avalible,Count}],
-	ai_semaphore_sup:semaphore(Opts).
--spec semaphore(Name :: atom(),Count :: integer())-> {ok,pid()}.
-semaphore(Name,Count)->
+	ai_semaphore_sup:new(Opts).
+-spec new(Name :: atom(),Count :: integer())-> {ok,pid()}.
+new(Name,Count)->
     Opts = [{avalible,Count},{name,ai_strings:atom_suffix(Name,?SUFFIX,false)}],
-    ai_semaphore_sup:semaphore(Opts).
+    ai_semaphore_sup:new(Opts).
 -spec destroy(Semaphore :: atom()|pid()) -> ok.
 destroy(Semaphore) when is_pid(Semaphore)->
     gen_server:cast(Semaphore,destroy);

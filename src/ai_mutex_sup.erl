@@ -15,14 +15,14 @@
 
 %% Supervisor callbacks
 -export([init/1]).
--export([mutex/1]).
+-export([new/1]).
 
 -define(SERVER, ?MODULE).
 
 %%%===================================================================
 %%% API functions
 %%%===================================================================
-mutex(Opts)->
+new(Opts)->
     supervisor:start_child(?SERVER,[Opts]).
 %%--------------------------------------------------------------------
 %% @doc
