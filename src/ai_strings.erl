@@ -14,7 +14,7 @@
 
 -spec dynamic_module(Name :: list(),Content :: list())->  {module,  atom()} | {error, term()}.
 dynamic_module(Name,Content)->
-    {Mod, Code} = dynamic_compile:from_string(Content),
+    {Mod, Code} = ai_dynamic_compile:from_string(Content),
     code:load_binary(Mod, Name, Code).
 
 
