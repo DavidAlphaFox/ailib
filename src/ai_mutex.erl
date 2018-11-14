@@ -37,7 +37,7 @@
 new()->
 	Opts = [],
 	ai_mutex_sup:new(Opts).
--spec new(Name :: atom())-> {ok,pid()}.
+-spec new(Name :: atom() | list())-> {ok,pid()}.
 new(Name)->
     Opts = [{name,ai_strings:atom_suffix(Name,?SUFFIX,false)}],
     ai_mutex_sup:new(Opts).

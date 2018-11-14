@@ -40,7 +40,7 @@
 new(Count)->
 	Opts = [{avalible,Count}],
 	ai_semaphore_sup:new(Opts).
--spec new(Name :: atom(),Count :: integer())-> {ok,pid()}.
+-spec new(Name :: atom() | list(),Count :: integer())-> {ok,pid()}.
 new(Name,Count)->
     Opts = [{avalible,Count},{name,ai_strings:atom_suffix(Name,?SUFFIX,false)}],
     ai_semaphore_sup:new(Opts).
