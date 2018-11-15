@@ -1,6 +1,7 @@
 -module(ai_http).
 -export([content_length/1,etag/1,last_modified/1]).
 -export([accept_ranges/1,content_range/1,range/1]).
+-export([encode_body/2,decode_body/2]).
 
 -define(CONTENT_LENGTH,<<"content-length">>).
 -define(ETAG,<<"etag">>).
@@ -50,3 +51,9 @@ range(Headers)->
         Range ->
             cow_http_hd:parse_range(Range)
     end.
+-spec decode_body(atom(),binary())-> binary() | {ok,binary()}.
+decode_body(<<"gzip">>,Body)->{ok,zlib:gunzip(Body)};
+decode_body(_,Body) -> Body.
+-spec encode_body(atom(),binary())-> binary() | {ok,binary()}.
+encode_body(gzip,Body) -> {ok,zlib:gzip(Body)};
+encode_body(_,Body) -> Body.
