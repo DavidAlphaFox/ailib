@@ -10,8 +10,8 @@ start_link() ->
 
 init([]) ->
     SupFlags = #{strategy => simple_one_for_one,
-                 intensity => 1,
-                 period => 5},
+                 intensity => 0,
+                 period => 10},
 
     MQChannel = #{id => ai_mq_channel,
                start => {ai_mq_channel, start_link, []},

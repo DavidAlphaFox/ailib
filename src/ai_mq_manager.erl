@@ -87,7 +87,7 @@ start_link(Name,Opts) ->
 
 
 init(Args) ->
-    MaxAgeSeconds = proplists:get_value(max_age,Args,3),
+    MaxAgeSeconds = proplists:get_value(max_age,Args,60),
     Supervisor = proplists:get_value(supervisor,Args,ai_mq_channel_sup),
     {ok, #state{dict = dict:new(), max_age = MaxAgeSeconds,supervisor = Supervisor}}.
 

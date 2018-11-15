@@ -27,7 +27,7 @@ handle_call(_From, _, State) ->
 
 handle_cast({From, subscribe, now, Subscriber}, State) ->
     NewSubscribers = add_subscriber(Subscriber, State#state.subscribers),
-    gen_server:reply(From, {ok, now_to_micro_seconds(os:timestamp())}),
+    gen_server:reply(From, {ok,self(),now_to_micro_seconds(os:timestamp())}),
     {noreply, purge_old_messages(State#state{ subscribers = NewSubscribers })};
 
 handle_cast({From, subscribe, Timestamp, Subscriber}, State) ->
@@ -37,7 +37,7 @@ handle_cast({From, subscribe, Timestamp, Subscriber}, State) ->
         _ -> Timestamp
     end,
     {NewSubscribers, LastPull} = pull_messages(ActualTimestamp, Subscriber, State),
-    gen_server:reply(From, {ok, LastPull}),
+    gen_server:reply(From, {ok, self(),LastPull}),
     {noreply, purge_old_messages(State#state{ subscribers = NewSubscribers,
                 last_pull = LastPull}), State#state.max_age * 1000};
 
@@ -49,7 +49,7 @@ handle_cast({From, pull, Timestamp}, State) ->
     end,
     ReturnMessages = messages_newer_than_timestamp(ActualTimestamp, State#state.messages),
     Now = now_to_micro_seconds(os:timestamp()),
-    gen_server:reply(From, {ok, Now, ReturnMessages}),
+    gen_server:reply(From, {ok,self(), Now, ReturnMessages}),
     {noreply, purge_old_messages(State#state{ last_pull = Now }), State#state.max_age * 1000};
 
 handle_cast({From, push, Message}, State) ->
@@ -59,13 +59,13 @@ handle_cast({From, push, Message}, State) ->
                 erlang:demonitor(Ref),
                 Now
         end, State#state.last_pull, State#state.subscribers),
-    gen_server:reply(From, {ok, Now}),
+    gen_server:reply(From, {ok,self(), Now}),
     State2 = purge_old_messages(State),
     NewMessages = ai_pq:add(Now, Message, State2#state.messages),
     {noreply, State2#state{messages = NewMessages, subscribers = [], last_pull = LastPull}, State#state.max_age * 1000};
 
 handle_cast({From, now}, State) ->
-    gen_server:reply(From, {ok,now_to_micro_seconds(os:timestamp())}),
+    gen_server:reply(From, {ok,self(),now_to_micro_seconds(os:timestamp())}),
     {noreply, purge_old_messages(State), State#state.max_age * 1000}.
 
 terminate(_Reason, _State) ->
