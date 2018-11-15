@@ -40,9 +40,9 @@
 new(Count)->
 	Opts = [{avalible,Count}],
 	ai_semaphore_sup:new(Opts).
--spec new(Name :: atom(),Count :: integer())-> {ok,pid()}.
+-spec new(Name :: atom() | list(),Count :: integer())-> {ok,pid()}.
 new(Name,Count)->
-    Opts = [{avalible,Count},{name,ai_strings:atom_suffix(Name,?SUFFIX,false)}],
+    Opts = [{avalible,Count},{name,ai_string:atom_suffix(Name,?SUFFIX,false)}],
     ai_semaphore_sup:new(Opts).
 -spec destroy(Semaphore :: atom()|pid()) -> ok.
 destroy(Semaphore) when is_pid(Semaphore)->
@@ -225,7 +225,7 @@ format_status(_Opt, Status) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-server_name(Semaphore)-> ai_strings:atom_suffix(Semaphore,?SUFFIX,true).
+server_name(Semaphore)-> ai_string:atom_suffix(Semaphore,?SUFFIX,true).
 destroy_semaphore(Waiters,Lockers,State)->
     State1 = destroy_waiters(Waiters,State),
     destroy_lockers(Lockers,State1).

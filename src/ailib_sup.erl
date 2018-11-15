@@ -29,4 +29,10 @@ init([]) ->
                  shutdown => 5000,
                  type => supervisor,
                  modules => [ai_mutex_sup]},    
-	{ok, {SupFlags,[AsciiRandom,SemaphoreSup,MutexSup]}}.
+    MQChannelSup = #{id => ai_mq_channel_sup,
+                 start => {ai_mq_channel_sup, start_link, []},
+                 restart => transient,
+                 shutdown => 5000,
+                 type => supervisor,
+                 modules => [ai_mq_channel_sup]}, 
+	{ok, {SupFlags,[AsciiRandom,SemaphoreSup,MutexSup,MQChannelSup]}}.

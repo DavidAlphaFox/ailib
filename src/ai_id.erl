@@ -15,7 +15,7 @@
 %
 
 
--module(ai_gen_id).
+-module(ai_id).
 
 -behaviour(gen_server).
 
@@ -45,7 +45,7 @@ start_link(Args)->
 next_id()->
     gen_server:call(?MODULE,next_id).
 next_id(Server)->
-		gen_server:call(Server,next_id).
+	gen_server:call(Server,next_id).
 %%%
 %%% gen_server callback
 %%%
