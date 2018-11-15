@@ -19,14 +19,14 @@ new()->
 
 -spec new(Name :: atom() | list())-> {ok,pid()}.
 new(Name)->
-    Opts = [{name,ai_strings:atom_suffix(Name,?SUFFIX,false)}],
+    Opts = [{name,ai_string:atom_suffix(Name,?SUFFIX,false)}],
     start_link(Opts).
 
 new(Name,Sup)->
-    Opts = [{name,ai_strings:atom_suffix(Name,?SUFFIX,false)},{supervisor,Sup}],
+    Opts = [{name,ai_string:atom_suffix(Name,?SUFFIX,false)},{supervisor,Sup}],
     start_link(Opts).
 new(Name,Sup,MaxAge)->
-    Opts = [{name,ai_strings:atom_suffix(Name,?SUFFIX,false)},
+    Opts = [{name,ai_string:atom_suffix(Name,?SUFFIX,false)},
             {supervisor,Sup},{max_age,MaxAge}],
     start_link(Opts).
 
@@ -130,7 +130,7 @@ handle_info(_Info, State) ->
 
 
 % internal
-server_name(Manager) -> ai_strings:atom_suffix(Manager,?SUFFIX,true).
+server_name(Manager) -> ai_string:atom_suffix(Manager,?SUFFIX,true).
 
 find_or_create_channel(Channel, #state{dict = Chan2Pid, max_age = MaxAge,supervisor = Sup} = State) ->
     Self = self(),

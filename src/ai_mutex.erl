@@ -39,7 +39,7 @@ new()->
 	ai_mutex_sup:new(Opts).
 -spec new(Name :: atom() | list())-> {ok,pid()}.
 new(Name)->
-    Opts = [{name,ai_strings:atom_suffix(Name,?SUFFIX,false)}],
+    Opts = [{name,ai_string:atom_suffix(Name,?SUFFIX,false)}],
     ai_mutex_sup:new(Opts).
 -spec destroy(Mutex :: atom()|pid()) -> ok.
 destroy(Mutex) when is_pid(Mutex)->
@@ -245,7 +245,7 @@ format_status(_Opt, Status) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-server_name(Mutex) -> ai_strings:atom_suffix(Mutex,?SUFFIX,true).
+server_name(Mutex) -> ai_string:atom_suffix(Mutex,?SUFFIX,true).
 
 lock_mutex(Locker,#state{monitors = M} =  State)->
 	M2 = ai_process:monitor_process(Locker,M),
