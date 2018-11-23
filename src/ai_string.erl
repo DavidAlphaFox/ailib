@@ -1,6 +1,7 @@
 -module(ai_string).
 
 -export([to_string/1,to_string/2]).
+-export([to_integer/1])
 -export([hash_to_string/3,md5_string/2,sha_string/2,sha256_string/2,sha512_string/2]).
 -export([prefix/2,find/3,slice/2,slice/3]).
 -export([atom_suffix/3]).
@@ -16,15 +17,18 @@ dynamic_module(Name,Content)->
     {Mod, Code} = ai_dynamic_compile:from_string(Content),
     code:load_binary(Mod, Name, Code).
 
+to_integer(Val) when erlang:is_binary(Val) -> erlang:binary_to_integer(Val);
+to_integer(Val) when erlang:is_list(Val) -> erlang:list_to_integer(Val);
+to_integer(Val) when erlang:is_integer(Val) -> Val.
 
-to_string(Val) when is_integer(Val) -> erlang:integer_to_binary(Val);
-to_string(Val) when is_float(Val) -> erlang:list_to_binary(io_lib:format("~.2f", [Val]));
-to_string(Val) when is_atom(Val) -> erlang:atom_to_binary(Val);
-to_string(Val) when is_list(Val)  ->erlang:list_to_binary(Val);
+to_string(Val) when erlang:is_integer(Val) -> erlang:integer_to_binary(Val);
+to_string(Val) when erlang:is_float(Val) -> erlang:list_to_binary(io_lib:format("~.2f", [Val]));
+to_string(Val) when erlang:is_atom(Val) -> erlang:atom_to_binary(Val);
+to_string(Val) when erlang:is_list(Val)  ->erlang:list_to_binary(Val);
 to_string(Val)-> Val.
 
 to_string(Format,Val) ->
-		to_string(io_lib:format(Format,[Val])).
+	to_string(io_lib:format(Format,[Val])).
 
 md5_string(Data,Case)->
 	Hash = crypto:hash(md5, Data),
