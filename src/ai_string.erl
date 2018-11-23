@@ -1,7 +1,7 @@
 -module(ai_string).
 
 -export([to_string/1,to_string/2]).
--export([to_integer/1])
+-export([to_integer/1]).
 -export([hash_to_string/3,md5_string/2,sha_string/2,sha256_string/2,sha512_string/2]).
 -export([prefix/2,find/3,slice/2,slice/3]).
 -export([atom_suffix/3]).
