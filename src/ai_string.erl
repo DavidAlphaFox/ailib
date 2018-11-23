@@ -63,7 +63,11 @@ hash_to_string(Hash,Len,Case) ->
 
 -spec atom_suffix(Name :: atom(),Suffix :: string(),Exist :: boolean()) -> atom().
 atom_suffix(Name,Suffix,Exist) when erlang:is_binary(Suffix)->
-    atom_suffix(Name, erlang:binary_to_list(Suffix),Exist);
+	atom_suffix(Name, erlang:binary_to_list(Suffix),Exist);
+atom_suffix(Name,Suffix,Exist) when erlang:is_atom(Name)->
+	atom_suffix(erlang:atom_to_list(Name),Suffix,Exist);
+atom_suffix(Name,Suffix,Exist) when erlang:is_binary(Name)->
+	atom_suffix(erlang:binary_to_list(Name),Suffix,Exist);
 atom_suffix(Name,Suffix,Exist)->
     StrName  = Name ++ Suffix,
     atom_suffix(StrName,Exist).
