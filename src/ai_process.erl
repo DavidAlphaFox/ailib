@@ -25,12 +25,12 @@ demonitor_process(Pid,Monitors) when erlang:is_map(Monitors) and erlang:is_pid(P
     case maps:get(Pid,Monitors,undefined) of 
         undefined -> Monitors;
         MRef -> 
-            erlang:demonitor(MRef),
+            erlang:demonitor(MRef,[flush]),
             M1 = maps:remove(MRef,Monitors),
             maps:remove(Pid,M1)
     end;
 demonitor_process(MRef,Monitors) when erlang:is_map(Monitors) and erlang:is_reference(MRef)->
-    erlang:demonitor(MRef),
+    erlang:demonitor(MRef,[flush]),
     case maps:get(MRef,Monitors,undefined) of 
         undefined -> Monitors;
         Pid ->
@@ -40,7 +40,7 @@ demonitor_process(MRef,Monitors) when erlang:is_map(Monitors) and erlang:is_refe
 demonitor_process(Pid,Monitors) when erlang:is_pid(Pid)->
     case ets:match_object(Monitors,{Pid,'_'}) of
         [{Pid,MRef}] ->
-            erlang:demonitor(MRef),
+            erlang:demonitor(MRef,[flush]),
             ets:delete(Monitors,Pid);
          [] -> ok
    end,
@@ -48,7 +48,7 @@ demonitor_process(Pid,Monitors) when erlang:is_pid(Pid)->
 demonitor_process(MRef,Monitors) when erlang:is_reference(MRef)->
         case ets:match_object(Monitors,{'_',MRef}) of
         [{Pid,MRef}] ->
-            erlang:demonitor(MRef),
+            erlang:demonitor(MRef,[flush]),
             ets:delete(Monitors,Pid);
          [] -> ok
    end,
