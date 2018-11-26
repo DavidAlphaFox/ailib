@@ -33,7 +33,7 @@ restart(#ai_timer{timeout = Timeout, msg = TimeoutMsg}  = Timer)->
         R -> R
     end.
 
-async_restart(#ai_timer{timeout = Timeout, msg = TimeoutMsg}  = Timer)
+async_restart(#ai_timer{timeout = Timeout, msg = TimeoutMsg}  = Timer)->
     case check_rule(Timeout,TimeoutMsg) of 
         true -> start_timer(Timeout,TimeoutMsg,true,Timer);
         R -> R
