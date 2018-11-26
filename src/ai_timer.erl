@@ -21,7 +21,7 @@ cancel_internal(#ai_timer{async = Async,info = Info,ref = Ref} = Timer )->
     if 
         Ref == undefined -> Timer;
         true -> 
-            erlang:cancel(Ref,[{async,Async},{info,Info}]),
+            erlang:cancel_timer(Ref,[{async,Async},{info,Info}]),
             Timer#ai_timer{prev_ref = Ref,ref = undefined}
     end.
 
