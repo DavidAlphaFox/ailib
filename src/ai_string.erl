@@ -31,13 +31,10 @@ to_integer(Val) when erlang:is_integer(Val) -> Val.
 
 to_string(Val) when erlang:is_integer(Val) -> erlang:integer_to_binary(Val);
 to_string(Val) when erlang:is_float(Val) -> erlang:list_to_binary(io_lib:format("~.2f", [Val]));
-to_string(Val) when erlang:is_atom(Val) -> erlang:atom_to_binary(Val);
+to_string(Val) when erlang:is_boolean(Val) -> erlang:atom_to_binary(Val,latin1);
+to_string(Val) when erlang:is_atom(Val) -> erlang:atom_to_binary(Val,latin1);
 to_string(Val) when erlang:is_list(Val)  ->erlang:list_to_binary(Val);
-to_string(Val) when erlang:is_boolean(Val) ->
-	case Val of 
-		true -> <<"true">>;
-		false -> <<"false">>
-	end;
+
 to_string(Val)-> Val.
 
 to_string(Format,Val) ->
