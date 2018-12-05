@@ -1,7 +1,7 @@
 -module(ai_string).
 
 -export([to_string/1,to_string/2]).
--export([to_integer/1,to_boolen/1]).
+-export([to_integer/1,to_boolean/1]).
 -export([hash_to_string/3,md5_string/2,sha_string/2,sha256_string/2,sha512_string/2]).
 -export([prefix/2,find/3,slice/2,slice/3]).
 -export([atom_suffix/3]).
@@ -16,14 +16,14 @@ dynamic_module(Name,Content)->
     code:load_binary(Mod, Name, Code).
 
 
-to_boolen(<<"true">>) -> true;
-to_boolen(<<"false">>) -> false;
-to_boolen(<<"1">>) -> true;
-to_boolen(<<"0">>) -> false;
-to_boolen(1) -> true;
-to_boolen(0) -> false;
-to_boolen(true)-> true;
-to_boolen(false)-> false.
+to_boolean(<<"true">>) -> true;
+to_boolean(<<"false">>) -> false;
+to_boolean(<<"1">>) -> true;
+to_boolean(<<"0">>) -> false;
+to_boolean(1) -> true;
+to_boolean(0) -> false;
+to_boolean(true)-> true;
+to_boolean(false)-> false.
 
 to_integer(Val) when erlang:is_binary(Val) -> erlang:binary_to_integer(Val);
 to_integer(Val) when erlang:is_list(Val) -> erlang:list_to_integer(Val);
