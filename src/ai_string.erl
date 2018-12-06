@@ -7,9 +7,6 @@
 -export([atom_suffix/3]).
 -export([dynamic_module/2]).
 
--define(ASCII_LIST(CP1,CP2), CP1 < 256, CP2 < 256, CP1 =/= $\r).
-
-
 -spec dynamic_module(Name :: list(),Content :: list())->  {module,  atom()} | {error, term()}.
 dynamic_module(Name,Content)->
     {Mod, Code} = ai_dynamic_compile:from_string(Content),
@@ -20,6 +17,10 @@ to_boolean(<<"true">>) -> true;
 to_boolean(<<"false">>) -> false;
 to_boolean(<<"1">>) -> true;
 to_boolean(<<"0">>) -> false;
+to_boolean(<<"T">>) -> true;
+to_boolean(<<"F">>) -> false;
+to_boolean(<<"t">>) -> true;
+to_boolean(<<"f">>) -> false;
 to_boolean(1) -> true;
 to_boolean(0) -> false;
 to_boolean(true)-> true;
@@ -30,7 +31,7 @@ to_integer(Val) when erlang:is_list(Val) -> erlang:list_to_integer(Val);
 to_integer(Val) when erlang:is_integer(Val) -> Val.
 
 to_string(Val) when erlang:is_integer(Val) -> erlang:integer_to_binary(Val);
-to_string(Val) when erlang:is_float(Val) -> erlang:list_to_binary(io_lib:format("~.2f", [Val]));
+to_string(Val) when erlang:is_float(Val) -> erlang:list_to_binary(io_lib:format("~p", [Val]));
 to_string(Val) when erlang:is_boolean(Val) -> erlang:atom_to_binary(Val,latin1);
 to_string(Val) when erlang:is_atom(Val) -> erlang:atom_to_binary(Val,latin1);
 to_string(Val) when erlang:is_list(Val)  ->erlang:list_to_binary(Val);
