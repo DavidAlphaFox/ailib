@@ -6,7 +6,26 @@
 -export([prefix/2,find/3,slice/2,slice/3]).
 -export([atom_suffix/3]).
 -export([dynamic_module/2]).
+-export([html_escape/1,html_unescape/1]).
 
+-define(HTML_ESCAPE,[
+		{"\\&","\\&amp"},{"<","\\&lt;"},{">","\\&gt;"},
+		{"\"","\\&quot;"},{"'","\\&#39;"},{"/","\\&#x2F;"},
+		{"=","\\&#x3D;"},
+		{"`","\\&#x60;"} %% delimiter in IE
+	]).
+
+
+html_escape(Str)->
+	BinStr = to_string(Str),
+	lists:foldl(fun({El,Replace},Acc)->
+			re:replace(Acc,El,Replace,[global,{return,binary}])
+		end,BinStr,?HTML_ESCAPE).
+html_unescape(Str)->
+	BinStr = to_string(Str),
+	lists:foldr(fun({Replace,El},Acc)->
+			re:replace(Acc,El,Replace,[global,{return,binary}])
+		end,BinStr,?HTML_ESCAPE).
 -spec dynamic_module(Name :: list(),Content :: list())->  {module,  atom()} | {error, term()}.
 dynamic_module(Name,Content)->
     {Mod, Code} = ai_dynamic_compile:from_string(Content),
