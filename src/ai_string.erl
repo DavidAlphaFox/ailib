@@ -53,9 +53,8 @@ to_string(Val) when erlang:is_integer(Val) -> erlang:integer_to_binary(Val);
 to_string(Val) when erlang:is_float(Val) -> erlang:list_to_binary(io_lib:format("~p", [Val]));
 to_string(Val) when erlang:is_boolean(Val) -> erlang:atom_to_binary(Val,latin1);
 to_string(Val) when erlang:is_atom(Val) -> erlang:atom_to_binary(Val,latin1);
-to_string(Val) when erlang:is_list(Val)  ->erlang:list_to_binary(Val);
-
-to_string(Val)-> Val.
+to_string(Val) when erlang:is_list(Val)  ->unicode:characters_to_binary(Val);
+to_string(Val) when erlang:is_binary(Val)-> Val.
 
 to_string(Format,Val) ->
 	to_string(io_lib:format(Format,[Val])).
