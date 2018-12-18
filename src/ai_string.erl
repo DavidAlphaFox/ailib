@@ -1,41 +1,60 @@
 -module(ai_string).
 
 -export([to_string/1,to_string/2]).
--export([to_integer/1,to_boolen/1]).
+-export([to_integer/1,to_boolean/1]).
 -export([hash_to_string/3,md5_string/2,sha_string/2,sha256_string/2,sha512_string/2]).
 -export([prefix/2,find/3,slice/2,slice/3]).
 -export([atom_suffix/3]).
 -export([dynamic_module/2]).
+-export([html_escape/1,html_unescape/1]).
 
--define(ASCII_LIST(CP1,CP2), CP1 < 256, CP2 < 256, CP1 =/= $\r).
+-define(HTML_ESCAPE,[
+		{"\\&","\\&amp"},{"<","\\&lt;"},{">","\\&gt;"},
+		{"\"","\\&quot;"},{"'","\\&#39;"},{"/","\\&#x2F;"},
+		{"=","\\&#x3D;"},
+		{"`","\\&#x60;"} %% delimiter in IE
+	]).
 
 
+html_escape(Str)->
+	BinStr = to_string(Str),
+	lists:foldl(fun({El,Replace},Acc)->
+			re:replace(Acc,El,Replace,[global,{return,binary}])
+		end,BinStr,?HTML_ESCAPE).
+html_unescape(Str)->
+	BinStr = to_string(Str),
+	lists:foldr(fun({Replace,El},Acc)->
+			re:replace(Acc,El,Replace,[global,{return,binary}])
+		end,BinStr,?HTML_ESCAPE).
 -spec dynamic_module(Name :: list(),Content :: list())->  {module,  atom()} | {error, term()}.
 dynamic_module(Name,Content)->
     {Mod, Code} = ai_dynamic_compile:from_string(Content),
     code:load_binary(Mod, Name, Code).
 
 
-to_boolen(<<"true">>) -> true;
-to_boolen(<<"false">>) -> false;
-to_boolen(<<"1">>) -> true;
-to_boolen(<<"0">>) -> false;
-to_boolen(1) -> true;
-to_boolen(0) -> false;
-to_boolen(true)-> true;
-to_boolen(false)-> false.
+to_boolean(<<"true">>) -> true;
+to_boolean(<<"false">>) -> false;
+to_boolean(<<"1">>) -> true;
+to_boolean(<<"0">>) -> false;
+to_boolean(<<"T">>) -> true;
+to_boolean(<<"F">>) -> false;
+to_boolean(<<"t">>) -> true;
+to_boolean(<<"f">>) -> false;
+to_boolean(1) -> true;
+to_boolean(0) -> false;
+to_boolean(true)-> true;
+to_boolean(false)-> false.
 
 to_integer(Val) when erlang:is_binary(Val) -> erlang:binary_to_integer(Val);
 to_integer(Val) when erlang:is_list(Val) -> erlang:list_to_integer(Val);
 to_integer(Val) when erlang:is_integer(Val) -> Val.
 
 to_string(Val) when erlang:is_integer(Val) -> erlang:integer_to_binary(Val);
-to_string(Val) when erlang:is_float(Val) -> erlang:list_to_binary(io_lib:format("~.2f", [Val]));
+to_string(Val) when erlang:is_float(Val) -> erlang:list_to_binary(io_lib:format("~p", [Val]));
 to_string(Val) when erlang:is_boolean(Val) -> erlang:atom_to_binary(Val,latin1);
 to_string(Val) when erlang:is_atom(Val) -> erlang:atom_to_binary(Val,latin1);
-to_string(Val) when erlang:is_list(Val)  ->erlang:list_to_binary(Val);
-
-to_string(Val)-> Val.
+to_string(Val) when erlang:is_list(Val)  ->unicode:characters_to_binary(Val);
+to_string(Val) when erlang:is_binary(Val)-> Val.
 
 to_string(Format,Val) ->
 	to_string(io_lib:format(Format,[Val])).
