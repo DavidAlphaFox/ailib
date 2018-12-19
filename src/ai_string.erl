@@ -132,10 +132,11 @@ slice(String,Start,Length) -> ai_string_compat:slice(String,Start,Length).
 -endif.
 
 join([], _) -> <<>>;
-join(List,Sep)->
+join([H|T],Sep)->
 	SepBin = to_string(Sep),
-	[Hd | Tl] = [ [SepBin, to_string(B)] || B <- List ],
-    erlang:iolist_to_binary([erlang:tl(Hd) | Tl]).
+	Fun = fun(B)-> Str = to_string(B),<<SepBin/binary,Str/binary>> end,
+	L = [ Fun(B) || B <- T ],
+    lists:foldl(fun(I,Acc)-> <<Acc/binary,I/binary>> end,to_string(H),L).
 
 %%%
 %%% private
