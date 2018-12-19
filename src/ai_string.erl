@@ -3,7 +3,7 @@
 -export([to_string/1,to_string/2]).
 -export([to_integer/1,to_boolean/1]).
 -export([hash_to_string/3,md5_string/2,sha_string/2,sha256_string/2,sha512_string/2]).
--export([prefix/2,find/3,slice/2,slice/3]).
+-export([prefix/2,find/3,slice/2,slice/3,join/2]).
 -export([atom_suffix/3]).
 -export([dynamic_module/2]).
 -export([html_escape/1,html_unescape/1]).
@@ -130,6 +130,13 @@ slice(String,Start,Length)-> string:slice(String,Start,Length).
 -else.
 slice(String,Start,Length) -> ai_string_compat:slice(String,Start,Length).
 -endif.
+
+join([], _) -> <<>>;
+join(List,Sep)->
+	SepBin = to_string(Sep),
+	[Hd | Tl] = [ [SepBin, to_string(B)] || B <- List ],
+    erlang:iolist_to_binary([erlang:tl(Hd) | Tl]).
+
 %%%
 %%% private
 %%%
