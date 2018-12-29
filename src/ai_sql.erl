@@ -251,9 +251,9 @@ placeholder({Prefix, N}) ->
     <<$\s,P/binary,H/binary,$\s>>.
 
 escape_field({'as',Field,ASField})->
-    F = escape_field(Field),
-    AF = escape_field(ASField),
-    <<" ",F/binary," AS ",AF/binary," ">>;
+    F = ai_string:to_string(Field),
+    AF = ai_string:to_string(ASField),
+    escape_field(<<F/binary," AS ",AF/binary>>);
 escape_field(Field) -> 
     F = ai_string:to_string(Field),
     if 
