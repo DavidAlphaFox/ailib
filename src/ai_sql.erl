@@ -177,12 +177,13 @@ prepare_where_clause({Op,Name,{field,_} = F},{Values, CleanExprs, Count})->
         [{Op,Name, F} | CleanExprs],
     Count};
 prepare_where_clause({ Op,Name, Value}, {Values, CleanExprs, Count})
-    when not is_atom(Value) ->
+    when (not is_atom(Value)) 
+    andalso (not is_tuple(Value))->
     {[Value | Values],
          [{Op,Name, {'$', Count}} | CleanExprs],
     Count + 1};
 prepare_where_clause({Op,Name1, Name2}, {Values, CleanExprs, Count})
-    when is_atom(Name2) ->
+    when is_atom(Name2) orelse is_tuple(Name2) ->
     {Values,
         [{Op,Name1, Name2} | CleanExprs],
     Count};
@@ -250,6 +251,10 @@ placeholder({Prefix, N}) ->
     H = ai_string:to_string(N),
     <<$\s,P/binary,H/binary,$\s>>.
 
+escape_field({'as',Field,ASField})->
+    F = escape_field(Field),
+    AF = escape_field(ASField),
+    <<" \"",F/binary," AS ",AF/binary,"\" ">>;
 escape_field(Field) -> 
     F = ai_string:to_string(Field),
     if 
