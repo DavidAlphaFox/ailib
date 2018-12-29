@@ -1,6 +1,7 @@
 -module(ai_sql).
 
--export([select/2,insert/3,update/3,delete/1,where/2]).
+-export([select/2,insert/3,update/3,delete/1]).
+-export([where/2,group_by/2,order_by/2,limit/2,limit/3]).
 -export([build/1]).
 
 %-type field_name() :: atom().
@@ -19,7 +20,10 @@
     table = undefined,
     where = undefined,
     fields = undefined,
-    values = undefined
+    values = undefined,
+    order = undefined,
+    group = undefined,
+    limit = undefined
 }).
 
 %% from -> where -> group -> having -> select -> order by -> limit 
@@ -35,6 +39,11 @@ update(_Table,_Fields,Values) -> throw({unsupported,value,Values}).
 delete(Table) -> #ai_sql{op = delete, table = Table}.
 
 where(SQL,Conditions)-> SQL#ai_sql{where = Conditions}.
+order_by(SQL,Orders)-> SQL#ai_sql{order = Orders}.
+group_by(SQL,Groups) -> SQL#ai_sql{group = Groups}.
+limit(SQL,Limit) -> SQL#ai_sql{limit = {0,Limit}}.
+limit(SQL,Offset,Limit) -> SQL#ai_sql{limit = {Offset,Limit}}.
+
 
 build(SQL)->
     build(SQL#ai_sql.op,SQL).
@@ -52,14 +61,59 @@ build(insert,SQL)->
     {OPClause,SQL#ai_sql.values}.
 build(where,SQL,Hodler,Acc,Values)->
     case SQL#ai_sql.where of 
-        undefined -> {Acc,Values};
+        undefined -> build(group,SQL,Hodler,Acc,Values);
         Conditions ->
-            {WhereValues, CleanConditions,_Hodler0} = prepare_where(Conditions,Hodler),
+            {WhereValues, CleanConditions,Hodler0} = prepare_where(Conditions,Hodler),
             WhereClause = where_clause(CleanConditions),
             Query = <<Acc/binary," WHERE ", WhereClause/binary>>,
-            {Query,Values ++ WhereValues}
-    end.
-
+            build(group,SQL,Hodler0,Query,Values ++ WhereValues)
+    end;
+build(group,SQL,Hodler,Acc,Values)->
+    case SQL#ai_sql.group of 
+        undefined -> build(order,SQL,Hodler,Acc,Values);
+        Group when erlang:is_list(Group) -> 
+            G = ai_lists:foldr(fun(I,IAcc)->
+                    [ai_string:to_string(I)|IAcc]
+                end,[],Group),
+            GroupClause = ai_string:join(G,<<",">>),
+            Query = <<Acc/binary," GROUP BY ",GroupClause/binary>>,
+            build(order,SQL,Hodler,Query,Values);
+        _->
+            GroupClause = ai_string:to_string(SQL#ai_sql.group),
+            Query = <<Acc/binary," GROUP BY ",GroupClause/binary>>,
+            build(order,SQL,Hodler,Query,Values)
+    end;
+build(order,SQL,Hodler,Acc,Values)->
+    case SQL#ai_sql.order of 
+        undefined -> build(limit,SQL,Hodler,Acc,Values);
+        Order when erlang:is_list(Order) ->
+            O = ai_lists:foldr(fun(I,IAcc)->
+                    case I of 
+                        {'desc',F}-> 
+                            FBin = escape_field(F),
+                            [<<FBin/binary," DESC ">>|IAcc];
+                        {'asc',F}->
+                            FBin = escape_field(F),
+                            [<<FBin/binary," ASC ">>|IAcc];
+                        _ -> [ai_string:to_string(I)|IAcc]
+                    end
+                end,[],Order),
+            OrderClause = ai_string:join(O,<<",">>),
+            Query = <<Acc/binary," ORDER BY ",OrderClause/binary>>,
+            build(limit,SQL,Hodler,Query,Values);
+        _ ->
+            OrderClause = ai_string:to_string(SQL#ai_sql.order),
+            Query = <<Acc/binary," ORDER BY ",OrderClause/binary>>,
+            build(order,SQL,Hodler,Query,Values)
+    end;
+build(limit,SQL,_Hodler,Acc,Values)->
+    case SQL#ai_sql.limit of
+        undefined -> {Acc,Values};
+        {Offset,Limit}->
+            O = ai_string:to_string(Offset),
+            L = ai_string:to_string(Limit),
+            {<<Acc/binary," OFFSET ",O/binary," LIMIT ",L/binary>>}
+    end. 
 op_clause(select,SQL,Holder)->
     
     S = 
