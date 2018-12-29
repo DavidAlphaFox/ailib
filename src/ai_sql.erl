@@ -1,7 +1,7 @@
 -module(ai_sql).
 
 -export([select/2,insert/3,update/3,delete/1]).
--export([where/2,group_by/2,order_by/2,limit/2,limit/3]).
+-export([where/2,group_by/2,order_by/2,limit/2,limit/3,join/2]).
 -export([build/1]).
 
 %-type field_name() :: atom().
@@ -12,7 +12,9 @@
 %                   | {'not', condition()} | {field_name(),field_value()}
 %                   | {operator(),field_name(),field_value()}
 %                   | {operator(),field_name(),field_name()}.
-
+%-type join() :: {left|right|join,field_name(),field_name(),{on,field_name(),field_name()}}
+%                |{left|right|join,field_name(),field_name(),{on,field_name()}}
+%                |{join,binary()}
 %-type conditions() :: condition() | [condition()].
 
 -record(ai_sql,{
@@ -23,7 +25,8 @@
     values = undefined,
     order = undefined,
     group = undefined,
-    limit = undefined
+    limit = undefined,
+    join = undefined
 }).
 
 %% from -> where -> group -> having -> select -> order by -> limit 
@@ -43,7 +46,8 @@ order_by(SQL,Orders)-> SQL#ai_sql{order = Orders}.
 group_by(SQL,Groups) -> SQL#ai_sql{group = Groups}.
 limit(SQL,Limit) -> SQL#ai_sql{limit = {0,Limit}}.
 limit(SQL,Offset,Limit) -> SQL#ai_sql{limit = {Offset,Limit}}.
-
+join(SQL,Join) when erlang:is_tuple(Join)-> SQL#ai_sql{join = [Join]}; 
+join(SQL,Joins)-> SQL#ai_sql{join = Joins}.
 
 build(SQL)->
     build(SQL#ai_sql.op,SQL).
@@ -59,6 +63,18 @@ build(delete,SQL)->
 build(insert,SQL)->
     {_Hodler,OPClause} = op_clause(insert,SQL,1),
     {OPClause,SQL#ai_sql.values}.
+build(join,SQL,Hodler,Acc,Values)->
+    case SQL#ai_sql.join of 
+        undefined -> build(where,SQL,Hodler,Acc,Values);
+        Joins ->
+            J = lists:foldl(fun({'join',S},IAcc)-> 
+                    [S|IAcc]
+                end,[],Joins),
+            J1 = lists:reverse(J),
+            JoinClause = ai_string:join(J1,<<",">>),
+            Query = <<Acc/binary," ",JoinClause>>,
+            build(where,SQL,Hodler,Query,Values)
+    end;
 build(where,SQL,Hodler,Acc,Values)->
     case SQL#ai_sql.where of 
         undefined -> build(group,SQL,Hodler,Acc,Values);
