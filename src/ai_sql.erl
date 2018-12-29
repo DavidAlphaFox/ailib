@@ -112,7 +112,7 @@ build(limit,SQL,_Hodler,Acc,Values)->
         {Offset,Limit}->
             O = ai_string:to_string(Offset),
             L = ai_string:to_string(Limit),
-            {<<Acc/binary," OFFSET ",O/binary," LIMIT ",L/binary>>}
+            {<<Acc/binary," OFFSET ",O/binary," LIMIT ",L/binary>>,Values}
     end. 
 op_clause(select,SQL,Holder)->
     
