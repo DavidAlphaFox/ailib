@@ -118,7 +118,6 @@ op_clause(select,SQL,Holder)->
     
     S = 
         case SQL#ai_sql.fields of 
-            [_F] ->  escape_field(SQL#ai_sql.fields);
             Fields when erlang:is_list(Fields) ->
                 SelectFields = [escape_field(F) || F <- Fields],
                 ai_string:join(SelectFields,<<" , ">>);
