@@ -102,7 +102,7 @@ handle_call(sync, _From, S) ->
     {reply, ok, S};
 
 handle_call(Request, From, S) ->
-    error_logger:warning_msg("The pg_local server received an unexpected message:\n"
+    error_logger:warning_msg("The pg2_local server received an unexpected message:\n"
                              "handle_call(~p, ~p, _)\n", 
                              [Request, From]),
     {noreply, S}.
@@ -218,7 +218,7 @@ member_groups(Pid) ->
 ensure_started() ->
     case whereis(?MODULE) of
         undefined ->
-            C = {pg_local, {?MODULE, start_link, []}, permanent,
+            C = {pg2_local, {?MODULE, start_link, []}, permanent,
                  16#ffffffff, worker, [?MODULE]},
             supervisor:start_child(kernel_safe_sup, C);
         PgLocalPid ->
