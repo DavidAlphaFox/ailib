@@ -1,6 +1,6 @@
 -module(ai_process).
 -export([demonitor_process/2,monitor_process/2]).
--export([least_busy_pid/1]).
+-export([least_busy/1]).
 
 monitor_process(undefined,Monitors) -> Monitors;
 monitor_process(Pid,Monitors) when erlang:is_map(Monitors)->
@@ -54,7 +54,7 @@ demonitor_process(MRef,Monitors) when erlang:is_reference(MRef)->
    end,
    Monitors.
 
-least_busy_pid(Pids) ->
+least_busy(Pids) ->
     Members = lists:map(fun(Pid) ->
                 [
                     {message_queue_len, Messages},

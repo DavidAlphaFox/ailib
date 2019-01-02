@@ -1,4 +1,4 @@
--module(aimq_sup).
+-module(ai_mq_sup).
 -behaviour(supervisor).
 
 -export([start_link/0]).
