@@ -36,7 +36,7 @@ start_pool(PoolName, PoolArgs, WorkerArgs)->
     PoolSup = ai_string:atom_suffix(PoolName,"_sup",false),
     supervisor:start_child(ai_pool_worker_sup,
     {PoolSup, {ai_pool_pool_sup, start_link, [PoolName,Ch]},
-        permanent, 5000, supervisor, [ai_pool_pool_sup]}).
+        transient, 5000, supervisor, [ai_pool_pool_sup]}).
 
 start_worker(Group,{M, F, A}) ->
     {ok, Pid} = erlang:apply(M, F, A),
