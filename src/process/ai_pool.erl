@@ -74,7 +74,8 @@ rand(Name)->
 -record(state, {}).
 
 init([]) ->
-    ai_pool_table = ets:new(ai_pool_table, [ordered_set, protected, named_table]),
+    ai_pool_table = ets:new(ai_pool_table, [ordered_set, 
+        protected, named_table, {write_concurrency,false},{read_concurrency,true}]),
     {ok, #state{}}.
 
 handle_call(sync, _From, S) ->
