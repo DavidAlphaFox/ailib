@@ -3,6 +3,7 @@
 -export([to_string/1,to_string/2]).
 -export([to_integer/1,to_boolean/1]).
 -export([hash_to_string/3,md5_string/2,sha_string/2,sha256_string/2,sha512_string/2]).
+-export([string_to_hex/2]).
 -export([prefix/2,find/3,slice/2,slice/3,join/2]).
 -export([atom_suffix/3]).
 -export([dynamic_module/2]).
@@ -71,10 +72,20 @@ sha256_string(Data,Case) ->
 sha512_string(Data,Case)->
 	Hash = crypto:hash(sha512,Data),
 	hash_to_string(Hash,512,Case).
+string_to_hex(L,Case) when erlang:is_list(L)->
+	B = erlang:list_to_binary(L),
+	string_to_hex(B,Case);
+string_to_hex(B,Case)->
+	Size = erlang:byte_size(B) * 2,
+	Bits = erlang:byte_size(B) * 8,
+	<<S:Bits/unsigned-integer>> = B,
+	FormatStr = hex_format(Size,Case),
+	erlang:list_to_binary(lists:flatten(io_lib:format(FormatStr,[S]))).
 
 hash_to_string(Hash,Len,Case) ->
 	<<S:Len/big-unsigned-integer>> = Hash,
-	FormatStr = hash_format(Len,Case),
+	Size = Len div 8 * 2,
+	FormatStr = hex_format(Size,Case),
 	erlang:list_to_binary(lists:flatten(io_lib:format(FormatStr,[S]))).
 
 -spec atom_suffix(Name :: atom(),Suffix :: string(),Exist :: boolean()) -> atom().
@@ -141,8 +152,7 @@ join([H|T],Sep)->
 %%%
 %%% private
 %%%
-hash_format(Len,Case)-> 
-	Size = Len div 8 * 2,
+hex_format(Size,Case)-> 
 	Base = "~X.16.0",
 	F = 
 		case Case of
