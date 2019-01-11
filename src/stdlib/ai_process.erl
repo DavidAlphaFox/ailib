@@ -64,8 +64,8 @@ least_busy(Pids) ->
             end, Pids),
     SortedMembers = lists:keysort(2, lists:keysort(3, Members)),
     case SortedMembers of
-        [{Pid, _Messages, _StackSize}] -> Pid;
-        [{Pid, _Messages, _StackSize} | _Tail] -> Pid;
+        [{Pid, _Messages, _StackSize}] -> {ok,Pid};
+        [{Pid, _Messages, _StackSize} | _Tail] -> {ok,Pid};
         _ -> {error, empty_process_group}
     end.
         
