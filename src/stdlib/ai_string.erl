@@ -2,12 +2,13 @@
 
 -export([to_string/1,to_string/2]).
 -export([to_integer/1,to_boolean/1]).
--export([hash_to_string/3,md5_string/2,sha_string/2,sha256_string/2,sha512_string/2]).
--export([string_to_hex/2]).
+-export([md5_string/2,sha_string/2,sha256_string/2,sha512_string/2]).
+-export([string_to_hex/2,hash_to_string/3]).
 -export([prefix/2,find/3,slice/2,slice/3,join/2]).
 -export([atom_suffix/3]).
 -export([dynamic_module/2]).
 -export([html_escape/1,html_unescape/1]).
+-export([to_iolist/1]).
 
 -define(HTML_ESCAPE,[
 		{"\\&","\\&amp"},{"<","\\&lt;"},{">","\\&gt;"},
@@ -54,11 +55,28 @@ to_string(Val) when erlang:is_integer(Val) -> erlang:integer_to_binary(Val);
 to_string(Val) when erlang:is_float(Val) -> erlang:list_to_binary(io_lib:format("~p", [Val]));
 to_string(Val) when erlang:is_boolean(Val) -> erlang:atom_to_binary(Val,latin1);
 to_string(Val) when erlang:is_atom(Val) -> erlang:atom_to_binary(Val,latin1);
-to_string(Val) when erlang:is_list(Val)  ->unicode:characters_to_binary(Val);
+%% iolist场景
+to_string(Val) when erlang:is_list(Val)  ->
+	try 
+		erlang:iolist_to_binary(Val)
+	catch
+		_Reason:_Error -> unicode:characters_to_binary(Val)
+	end;
 to_string(Val) when erlang:is_binary(Val)-> Val.
 
 to_string(Format,Val) ->
 	to_string(io_lib:format(Format,[Val])).
+
+
+to_iolist(L) when erlang:is_list(L)->
+	B = 
+		try 
+			erlang:iolist_to_binary(L)
+		catch
+			_Reason:_Error -> unicode:characters_to_binary(L)
+		end,
+	to_iolist(B);
+to_iolist(B)-> erlang:binary_to_list(B).
 
 md5_string(Data,Case)->
 	Hash = crypto:hash(md5, Data),
@@ -72,6 +90,7 @@ sha256_string(Data,Case) ->
 sha512_string(Data,Case)->
 	Hash = crypto:hash(sha512,Data),
 	hash_to_string(Hash,512,Case).
+
 string_to_hex(L,Case) when erlang:is_list(L)->
 	B = erlang:list_to_binary(L),
 	string_to_hex(B,Case);
