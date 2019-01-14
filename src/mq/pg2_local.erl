@@ -81,8 +81,9 @@ in_group(Name, Pid) ->
     %% keep it that way to be fast in the common case.
     case member_present(Name, Pid) of
         true  -> true;
-        false -> sync(),
-                 member_present(Name, Pid)
+        false -> 
+            sync(),
+            member_present(Name, Pid)
     end.
 
 sync() ->
@@ -171,12 +172,12 @@ join_group(Name, Pid) ->
 %% 先退组,再退监控
 leave_group(Name, Pid) ->
     Member_Name_Pid = {member, Name, Pid},
-		%% 先减少1
+	%% 先减少1
     try ets:update_counter(pg2_local_table, Member_Name_Pid, {2, -1}) of
         N ->
             if 
                 N =:= 0 ->
-										%% 到0了，那么我们就删掉表项
+					%% 到0了，那么我们就删掉表项
                     true = ets:delete(pg2_local_table, {pid, Pid, Name}),
                     true = ets:delete(pg2_local_table, Member_Name_Pid);
                 true ->
