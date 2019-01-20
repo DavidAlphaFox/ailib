@@ -1,4 +1,8 @@
 -module(ai_hash_id).
+
+%% hash混淆ID的方案
+%% Fisher–Yates_shuffle 混淆算法
+
 -export([new/0, new/1,
          encode/2, decode/2,
          encode_hex/2, decode_hex/2,
