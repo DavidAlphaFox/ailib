@@ -171,14 +171,25 @@ join([H|T],Sep)->
 
 	-spec to_lower(binary()|atom()|list()) -> binary().
 
+
+
+
 to_lower(L) when is_binary(L) ->
-  << << (char_to_lower(C)) >> || << C >> <= L >>;
+	OTPRelease = erlang:list_to_integer(erlang:system_info(otp_release)),
+	if 
+		OTPRelease >= 20 -> string:lowercase(L);
+		true -> << << (char_to_lower(C)) >> || << C >> <= L >>
+	end;
 to_lower(L) ->
   to_lower(to_string(L)).
 
 -spec to_upper(binary()|atom()|list()) -> binary().
 to_upper(U) when is_binary(U)->
-  << << (char_to_upper(C)) >> || << C >> <= U >>;
+	OTPRelease = erlang:list_to_integer(erlang:system_info(otp_release)),
+	if 
+		OTPRelease >= 20 -> string:uppercase(U);
+		true ->   << << (char_to_upper(C)) >> || << C >> <= U >>
+	end;
 to_upper(L) ->
   to_upper(to_string(L)).
 
