@@ -2,7 +2,7 @@
 
 -export([start/0, start_link/0, init/1, handle_call/3, handle_cast/2,
          handle_info/2, terminate/2]).
--export([start_worker/2,start_pool/3,least_busy/1,rand/1]).
+-export([least_busy/1,rand/1,join/2]).
 
 %%----------------------------------------------------------------------------
 
@@ -25,26 +25,6 @@
 %%%
 %%% Exported functions
 %%%
-
-start_pool(PoolName, PoolArgs, WorkerArgs)->
-    WorkerModule  = maps:get(worker_module,PoolArgs),
-    PoolSize = maps:get(pool_size,PoolArgs),
-    CreateFun = fun(Id) ->
-            children_spec(Id,[PoolName,{WorkerModule,start_link,[WorkerArgs]}])
-        end,
-    Ch = lists:map(CreateFun, lists:seq(1, PoolSize)),
-    PoolSup = ai_string:atom_suffix(PoolName,"_sup",false),
-    supervisor:start_child(ai_pool_worker_sup,
-    {PoolSup, {ai_pool_pool_sup, start_link, [PoolName,Ch]},
-        transient, 5000, supervisor, [ai_pool_pool_sup]}).
-
-start_worker(Group,{M, F, A}) ->
-    {ok, Pid} = erlang:apply(M, F, A),
-    join(Group,Pid),
-    {ok, Pid}.
-
-children_spec(Name, Args) ->
-    {Name, {?MODULE, start_worker, Args}, permanent, 2000, worker, [?MODULE]}.
 
 
 start_link() ->

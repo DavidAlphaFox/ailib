@@ -56,19 +56,13 @@ init([]) ->
     SupFlags = #{strategy => one_for_one,
                  intensity => 5,
                  period => 5},
-    WorkerSup = #{ id => ai_pool_worker_sup,
-                    start => {ai_pool_worker_sup, start_link, []},
-                    restart => transient,
-                    shutdown => 5000,
-                    type => supervisor,
-                    modules => [ai_pool_worker_sup]},
     Pool = #{id => ai_pool,
                start => {ai_pool, start_link, []},
                restart => transient,
                shutdown => 5000,
                type => worker,
                modules => [ai_pool]},
-    {ok, {SupFlags, [WorkerSup,Pool]}}.
+    {ok, {SupFlags, [Pool]}}.
 
 %%%===================================================================
 %%% Internal functions
