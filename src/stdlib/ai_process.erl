@@ -65,7 +65,16 @@ least_busy(Pids) ->
     SortedMembers = lists:keysort(2, lists:keysort(3, Members)),
     case SortedMembers of
         [{Pid, _Messages, _StackSize}] -> {ok,Pid};
-        [{Pid, _Messages, _StackSize} | _Tail] -> {ok,Pid};
+        [{Pid, _Messages, _StackSize} | Tail] -> 
+            case erlang:is_process_alive(Pid) of 
+                true -> {ok,Pid};
+                false ->
+                    case lists:search(fun({Maybe,_M0,_S0})->
+                            erlang:is_process_alive(Maybe)
+                        end,Tail) of 
+                            {value,{Found,_M0,_S0}} -> {ok,Found};
+                            false -> {error, empty_process_group}
+                    end
+            end;
         _ -> {error, empty_process_group}
     end.
-        
