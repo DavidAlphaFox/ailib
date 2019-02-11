@@ -1,179 +1,194 @@
+%%%-------------------------------------------------------------------
+%%% @author David Gao <david@Davids-MacBook-Pro.local>
+%%% @copyright (C) 2019, David Gao
+%%% @doc
+%%%
+%%% @end
+%%% Created : 11 Feb 2019 by David Gao <david@Davids-MacBook-Pro.local>
+%%%-------------------------------------------------------------------
 -module(ai_pool).
 
--export([start/0, start_link/0, init/1, handle_call/3, handle_cast/2,
-         handle_info/2, terminate/2]).
--export([least_busy/1,rand/1,join/2]).
+-behaviour(gen_server).
 
-%%----------------------------------------------------------------------------
+%% API
+-export([start_link/3]).
 
--ifdef(use_specs).
+%% gen_server callbacks
+-export([init/1, handle_call/3, handle_cast/2, handle_info/2,
+	terminate/2, code_change/3, format_status/2]).
 
--type(name() :: term()).
+-export([pool_spec/3,least_busy/1,rand/1]).
 
--spec(start_link/0 :: () -> {'ok', pid()} | {'error', any()}).
--spec(start/0 :: () -> {'ok', pid()} | {'error', any()}).
--spec(join/2 :: (name(), pid()) -> 'ok').
--spec(leave/2 :: (name(), pid()) -> 'ok').
--spec(get_members/1 :: (name()) -> [pid()]).
+-define(SERVER, ?MODULE).
 
--endif.
+-record(state, {
+    name,
+    supervisor,
+    size,
+    workers
+}).
 
-%%----------------------------------------------------------------------------
+%%%===================================================================
+%%% API
+%%%===================================================================
+pool_spec(Name, PoolArgs, WorkerArgs) ->
+    {Name, {ai_pool, start_link, [Name,PoolArgs, WorkerArgs]},
+     permanent, 5000, worker, [ai_pool]}.
+least_busy(Name) -> ai_pool_table:least_busy(Name).
+rand(Name) -> ai_pool_table:rand(Name).
+%%--------------------------------------------------------------------
+%% @doc
+%% Starts the server
+%% @end
+%%--------------------------------------------------------------------
+-spec start_link(atom(),term(),term()) -> {ok, Pid :: pid()} |
+	{error, Error :: {already_started, pid()}} |
+	{error, Error :: term()} |
+	ignore.
+start_link(Name, PoolArgs, WorkerArgs) ->
+    gen_server:start_link(?MODULE, {Name,PoolArgs, WorkerArgs},[]).
 
-%%% As of R13B03 monitors are used instead of links.
+%%%===================================================================
+%%% gen_server callbacks
+%%%===================================================================
 
-%%%
-%%% Exported functions
-%%%
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Initializes the server
+%% @end
+%%--------------------------------------------------------------------
+-spec init(Args :: term()) -> {ok, State :: term()} |
+	{ok, State :: term(), Timeout :: timeout()} |
+	{ok, State :: term(), hibernate} |
+	{stop, Reason :: term()} |
+	ignore.
+init({Name,PoolArgs, WorkerArgs})->
+    process_flag(trap_exit, true),
+    init(PoolArgs,WorkerArgs,#state{name = Name}).
+init([{worker_module, Mod} | Rest], WorkerArgs, #state{name = Name} = State) when is_atom(Mod) ->
+    %% 该进程挂了，会将所有进程全部挂掉
+    {ok, Sup} = ai_pool_worker_sup:start_link(Name, Mod,WorkerArgs),
+    init(Rest, WorkerArgs, State#state{supervisor = Sup});
+init([{size, Size} | Rest], WorkerArgs, State) when is_integer(Size) ->
+    init(Rest, WorkerArgs, State#state{size = Size});
+init([_ | Rest], WorkerArgs, State) ->
+    init(Rest, WorkerArgs, State);
+init([], _WorkerArgs, #state{size = Size, supervisor = Sup} = State) ->
+    Workers = prepopulate(Size, Sup),
+    {ok, State#state{workers = Workers}}.
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Handling call messages
+%% @end
+%%--------------------------------------------------------------------
+-spec handle_call(Request :: term(), From :: {pid(), term()}, State :: term()) ->
+	{reply, Reply :: term(), NewState :: term()} |
+	{reply, Reply :: term(), NewState :: term(), Timeout :: timeout()} |
+	{reply, Reply :: term(), NewState :: term(), hibernate} |
+	{noreply, NewState :: term()} |
+	{noreply, NewState :: term(), Timeout :: timeout()} |
+	{noreply, NewState :: term(), hibernate} |
+	{stop, Reason :: term(), Reply :: term(), NewState :: term()} |
+	{stop, Reason :: term(), NewState :: term()}.
+handle_call(_Request, _From, State) ->
+	Reply = ok,
+	{reply, Reply, State}.
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Handling cast messages
+%% @end
+%%--------------------------------------------------------------------
+-spec handle_cast(Request :: term(), State :: term()) ->
+	{noreply, NewState :: term()} |
+	{noreply, NewState :: term(), Timeout :: timeout()} |
+	{noreply, NewState :: term(), hibernate} |
+	{stop, Reason :: term(), NewState :: term()}.
+handle_cast(_Request, State) ->
+	{noreply, State}.
 
-start_link() ->
-    gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Handling all non call/cast messages
+%% @end
+%%--------------------------------------------------------------------
+-spec handle_info(Info :: timeout() | term(), State :: term()) ->
+	{noreply, NewState :: term()} |
+	{noreply, NewState :: term(), Timeout :: timeout()} |
+	{noreply, NewState :: term(), hibernate} |
+    {stop, Reason :: normal | term(), NewState :: term()}.
+    
 
-start() ->
-    ensure_started().
+handle_info({'EXIT', Pid, _Reason}, #state{supervisor = Sup} =  State) ->
+    case lists:member(Pid, State#state.workers) of
+        true ->
+            W = lists:filter(fun (P) -> P =/= Pid end, State#state.workers),
+            {noreply, State#state{workers = [new_worker(Sup) | W]}};
+        false ->
+            {noreply, State}
+    end;
 
-join(Name, Pid) when is_pid(Pid) ->
-    gen_server:cast(?MODULE, {join, Name, Pid}).
+handle_info(_Info, State) ->
+	{noreply, State}.
 
-least_busy(Name) ->
-    Members  = group_members(Name),
-    ai_process:least_busy(Members).
-rand(Name)->
-    case group_members(Name) of
-        [] -> {error, empty_process_group};
-        Members ->
-            {_,_,X} = erlang:timestamp(),
-            {ok,lists:nth((X rem length(Members))+1, Members)}
-    end.
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% This function is called by a gen_server when it is about to
+%% terminate. It should be the opposite of Module:init/1 and do any
+%% necessary cleaning up. When it returns, the gen_server terminates
+%% with Reason. The return value is ignored.
+%% @end
+%%--------------------------------------------------------------------
+-spec terminate(Reason :: normal | shutdown | {shutdown, term()} | term(),
+	State :: term()) -> any().
+terminate(_Reason, _State) ->
+	ok.
 
-%%%
-%%% Callback functions from gen_server
-%%%
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Convert process state when code is changed
+%% @end
+%%--------------------------------------------------------------------
+-spec code_change(OldVsn :: term() | {down, term()},
+	State :: term(),
+	Extra :: term()) -> {ok, NewState :: term()} |
+	{error, Reason :: term()}.
+code_change(_OldVsn, State, _Extra) ->
+	{ok, State}.
 
--record(state, {}).
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% This function is called for changing the form and appearance
+%% of gen_server status when it is returned from sys:get_status/1,2
+%% or when it appears in termination error logs.
+%% @end
+%%--------------------------------------------------------------------
+-spec format_status(Opt :: normal | terminate,
+	Status :: list()) -> Status :: term().
+format_status(_Opt, Status) ->
+	Status.
 
-init([]) ->
-    ai_pool_table = ets:new(ai_pool_table, [ordered_set, 
-        protected, named_table, {write_concurrency,false},{read_concurrency,true}]),
-    {ok, #state{}}.
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
 
-handle_call(sync, _From, S) ->
-    {reply, ok, S};
+new_worker(Sup) ->
+    {ok, Pid} = supervisor:start_child(Sup, []),
+    true = link(Pid),
+    Pid.
+prepopulate(N, _Sup) when N < 1 ->
+    [];
+prepopulate(N, Sup) ->
+    prepopulate(N, Sup, []).
 
-handle_call(Request, From, S) ->
-    error_logger:warning_msg("The ai_pool server received an unexpected message:\n"
-                             "handle_call(~p, ~p, _)\n", 
-                             [Request, From]),
-    {noreply, S}.
-
-handle_cast({join, Name, Pid}, S) ->
-    join_group(Name, Pid),
-    {noreply, S};
-
-handle_cast(_, S) ->
-    {noreply, S}.
-
-handle_info({'DOWN', MonitorRef, process, _Pid, _Info}, S) ->
-    member_died(MonitorRef),
-    {noreply, S};
-handle_info(_, S) ->
-    {noreply, S}.
-
-terminate(_Reason, _S) ->
-    true = ets:delete(ai_pool_table),
-    ok.
-
-%%%
-%%% Local functions
-%%%
-
-%%% One ETS table, ai_pool_table, is used for bookkeeping. The type of the
-%%% table is ordered_set, and the fast matching of partially
-%%% instantiated keys is used extensively.
-%%%
-%%% {{ref, Pid}, MonitorRef, Counter}
-%%% {{ref, MonitorRef}, Pid}
-%%%    Each process has one monitor. Counter is incremented when the
-%%%    Pid joins some group.
-%%% {{member, Name, Pid}, _}
-%%%    Pid is a member of group Name, GroupCounter is incremented when the
-%%%    Pid joins the group Name.
-%%% {{pid, Pid, Name}}
-%%%    Pid is a member of group Name.
-
-member_died(Ref) ->
-    [{{ref, Ref}, Pid}] = ets:lookup(ai_pool_table, {ref, Ref}),
-    Names = member_groups(Pid),
-    _ = [leave_group(Name, P) || 
-            Name <- Names,
-            P <- member_in_group(Pid, Name)],
-    ok.
-%% 先监控，再进入组
-join_group(Name, Pid) ->
-    Ref_Pid = {ref, Pid}, 
-	%% 先尝试 +1 如果 +1 失败
-	%% 说明pid不在ets表中，那么需要先Monitor再添加
-    try _ = ets:update_counter(ai_pool_table, Ref_Pid, {3, +1})
-    catch _:_ ->
-            Ref = erlang:monitor(process, Pid),
-            true = ets:insert(ai_pool_table, {Ref_Pid, Ref, 1}),
-            true = ets:insert(ai_pool_table, {{ref, Ref}, Pid})
-    end,
-    Member_Name_Pid = {member, Name, Pid},
-    try _ = ets:update_counter(ai_pool_table, Member_Name_Pid, {2, +1})
-    catch _:_ ->
-            true = ets:insert(ai_pool_table, {Member_Name_Pid, 1}),
-            true = ets:insert(ai_pool_table, {{pid, Pid, Name}})
-    end.
-%% 先退组,再退监控
-leave_group(Name, Pid) ->
-    Member_Name_Pid = {member, Name, Pid},
-		%% 先减少1
-    try ets:update_counter(ai_pool_table, Member_Name_Pid, {2, -1}) of
-        N ->
-            if 
-                N =:= 0 ->
-										%% 到0了，那么我们就删掉表项
-                    true = ets:delete(ai_pool_table, {pid, Pid, Name}),
-                    true = ets:delete(ai_pool_table, Member_Name_Pid);
-                true ->
-                    ok
-            end,
-            Ref_Pid = {ref, Pid}, 
-            case ets:update_counter(ai_pool_table, Ref_Pid, {3, -1}) of
-                0 ->
-                    [{Ref_Pid,Ref,0}] = ets:lookup(ai_pool_table, Ref_Pid),
-                    true = ets:delete(ai_pool_table, {ref, Ref}),
-                    true = ets:delete(ai_pool_table, Ref_Pid),
-                    true = erlang:demonitor(Ref, [flush]),
-                    ok;
-                _ ->
-                    ok
-            end
-    catch _:_ ->
-            ok
-    end.
-%% 直接从表中找
-group_members(Name) ->
-    [P || 
-        [P, N] <- ets:match(ai_pool_table, {{member, Name, '$1'},'$2'}),
-        _ <- lists:seq(1, N)].
-
-member_in_group(Pid, Name) ->
-    [{{member, Name, Pid}, N}] = ets:lookup(ai_pool_table, {member, Name, Pid}),
-    lists:duplicate(N, Pid).
-
-
-member_groups(Pid) ->
-    [Name || [Name] <- ets:match(ai_pool_table, {{pid, Pid, '$1'}})].
-
-ensure_started() ->
-    case whereis(?MODULE) of
-        undefined ->
-            C = {pg2_local, {?MODULE, start_link, []}, permanent,
-                 16#ffffffff, worker, [?MODULE]},
-            supervisor:start_child(kernel_safe_sup, C);
-        PgLocalPid ->
-            {ok, PgLocalPid}
-    end.
+prepopulate(0, _Sup, Workers) ->
+    Workers;
+prepopulate(N, Sup, Workers) ->
+    prepopulate(N-1, Sup, [new_worker(Sup) | Workers]).
