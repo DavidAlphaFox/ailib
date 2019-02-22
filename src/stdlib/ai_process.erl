@@ -1,6 +1,7 @@
 -module(ai_process).
 -export([demonitor_process/2,monitor_process/2]).
 -export([least_busy/1]).
+-export([global_process/1]).
 
 monitor_process(undefined,Monitors) -> Monitors;
 monitor_process(Pid,Monitors) when erlang:is_map(Monitors)->
@@ -78,3 +79,12 @@ least_busy(Pids) ->
             end;
         _ -> {error, empty_process_group}
     end.
+
+global_process(Pid)->
+    Name =
+        case erlang:process_info(Pid, [registered_name]) of
+            [{registered_name, []}] -> Pid;
+            [{registered_name, RegName}] -> RegName
+        end,
+    {Name,erlang:node(Pid)}.
+
