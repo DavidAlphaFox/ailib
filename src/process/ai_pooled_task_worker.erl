@@ -10,7 +10,9 @@
 -export([start_link/0]).
 -export([loop/0]).
 
-start_link()-> proc_lib:spawn_link(?MODULE,loop,[]).
+start_link()-> 
+    Pid = proc_lib:spawn_link(?MODULE,loop,[]),
+    {ok,Pid}.
 
 loop()->
     receive

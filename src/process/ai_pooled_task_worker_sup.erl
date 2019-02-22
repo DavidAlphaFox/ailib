@@ -11,7 +11,7 @@ init([]) ->
                  intensity => 5,
                  period => 5},
     ChildSpec = #{ id => ai_pooled_task_worker,
-                   start => {ai_pooled_task_worker, start_worker, []},
+                   start => {ai_pooled_task_worker, start_link, []},
                    restart => temporary,
                    shutdown => 5000,
                    type => worker,
