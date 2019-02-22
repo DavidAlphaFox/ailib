@@ -121,7 +121,6 @@ handle_cast(_Request, State) ->
 	{noreply, NewState :: term(), Timeout :: timeout()} |
 	{noreply, NewState :: term(), hibernate} |
     {stop, Reason :: normal | term(), NewState :: term()}.
-    
 
 handle_info({'EXIT', Pid, _Reason}, #state{supervisor = Sup} =  State) ->
     case lists:member(Pid, State#state.workers) of
