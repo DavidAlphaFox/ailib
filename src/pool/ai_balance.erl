@@ -6,7 +6,7 @@
 %%% @end
 %%% Created : 11 Feb 2019 by David Gao <david@Davids-MacBook-Pro.local>
 %%%-------------------------------------------------------------------
--module(ai_pool).
+-module(ai_balance).
 
 -behaviour(gen_server).
 
@@ -17,7 +17,7 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
 	terminate/2, code_change/3, format_status/2]).
 
--export([pool_spec/3,least_busy/1,rand/1]).
+-export([balance_spec/3,least_busy/1,rand/1]).
 
 -define(SERVER, ?MODULE).
 
@@ -31,11 +31,11 @@
 %%%===================================================================
 %%% API
 %%%===================================================================
-pool_spec(Name, PoolArgs, WorkerArgs) ->
-    {Name, {ai_pool, start_link, [Name,PoolArgs, WorkerArgs]},
-     permanent, 5000, worker, [ai_pool]}.
-least_busy(Name) -> ai_pool_table:least_busy(Name).
-rand(Name) -> ai_pool_table:rand(Name).
+balance_spec(Name, PoolArgs, WorkerArgs) ->
+    {Name, {ai_balance, start_link, [Name,PoolArgs, WorkerArgs]},
+     permanent, 5000, worker, [ai_balance]}.
+least_busy(Name) -> ai_balance_pool:least_busy(Name).
+rand(Name) -> ai_balance_pool:rand(Name).
 %%--------------------------------------------------------------------
 %% @doc
 %% Starts the server
@@ -68,7 +68,7 @@ init({Name,PoolArgs, WorkerArgs})->
     init(PoolArgs,WorkerArgs,#state{name = Name}).
 init([{worker_module, Mod} | Rest], WorkerArgs, #state{name = Name} = State) when is_atom(Mod) ->
     %% 该进程挂了，会将所有进程全部挂掉
-    {ok, Sup} = ai_pool_worker_sup:start_link(Name, Mod,WorkerArgs),
+    {ok, Sup} = ai_balance_worker_sup:start_link(Name, Mod,WorkerArgs),
     init(Rest, WorkerArgs, State#state{supervisor = Sup});
 init([{size, Size} | Rest], WorkerArgs, State) when is_integer(Size) ->
     init(Rest, WorkerArgs, State#state{size = Size});

@@ -6,12 +6,12 @@
 %%% @end
 %%% Created : 15 Oct 2018 by David Gao <david@laptop-02.local>
 %%%-------------------------------------------------------------------
--module(ai_pool_worker_sup).
+-module(ai_balance_sup).
 
 -behaviour(supervisor).
 
 %% API
--export([start_link/3,start_worker/3]).
+-export([start_link/0]).
 
 %% Supervisor callbacks
 -export([init/1]).
@@ -27,12 +27,13 @@
 %% Starts the supervisor
 %% @end
 %%--------------------------------------------------------------------
--spec start_link(atom(),atom(),term()) -> {ok, Pid :: pid()} |
+-spec start_link() -> {ok, Pid :: pid()} |
                       {error, {already_started, Pid :: pid()}} |
                       {error, {shutdown, term()}} |
                       {error, term()} |
                       ignore.
-start_link(Name, Mod,Args) -> supervisor:start_link(?MODULE, {Name,Mod, Args}).
+start_link() ->
+    supervisor:start_link({local, ?SERVER}, ?MODULE, []).
 
 %%%===================================================================
 %%% Supervisor callbacks
@@ -51,22 +52,18 @@ start_link(Name, Mod,Args) -> supervisor:start_link(?MODULE, {Name,Mod, Args}).
                   {ok, {SupFlags :: supervisor:sup_flags(),
                         [ChildSpec :: supervisor:child_spec()]}} |
                   ignore.
-init({Name,Mod,Args}) ->
-    SupFlags = #{strategy => simple_one_for_one,
+init([]) ->
+    SupFlags = #{strategy => one_for_one,
                  intensity => 5,
                  period => 5},
-    ChildSpec = #{ id => Mod,
-				 start => {?MODULE, start_worker, [Name,Mod,Args]},
-				 restart => temporary,
-				 shutdown => 5000,
-				 type => worker,
-				 modules => [Mod]},
-    {ok, {SupFlags, [ChildSpec]}}.
+    PoolTableSpec = #{id => ai_balance_pool,
+               start => {ai_balance_pool, start_link, []},
+               restart => transient,
+               shutdown => 5000,
+               type => worker,
+               modules => [ai_balance_pool]},    
+	{ok, {SupFlags, [PoolTableSpec]}}.
 
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-start_worker(Name,Mod,Args) ->
-    {ok, Pid} = Mod:start_link(Args),
-    ai_pool_table:join(Name,Pid),
-    {ok, Pid}.

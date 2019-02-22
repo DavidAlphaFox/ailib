@@ -1,147 +1,169 @@
--module(ai_pooled_task).
+-module(ai_pool).
+-behaviour(gen_server).
 
--export([start_link/1]).
--export([init/1, handle_call/3, handle_cast/2, handle_info/2,
-				 terminate/2, code_change/3, format_status/2]).
+-export([pool_spec/2, pool_spec/3, pool_spec/4, start/1,
+         start/2, start_link/1, start_link/2, stop/1, status/1]).
+-export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,
+         code_change/3]).
 
--export([checkin/1]).
--export([async/1,
-				 async/2,
-				 async/3,
-				 async/4]).
--export([await/1,
-				 await/2,
-				 safe_await/2,
-         safe_await/3]).
+-export([checkout/1, checkout/2, checkout/3, checkin/2, transaction/2,
+         transaction/3]).
+
+
+-export_type([pool/0]).
+-define(TIMEOUT, 5000).
+
+-type pool() ::
+    Name :: (atom() | pid()) |
+    {Name :: atom(), node()} |
+    {local, Name :: atom()} |
+    {global, GlobalName :: any()} |
+    {via, Module :: atom(), ViaName :: any()}.
+
+% Copied from gen:start_ret/0
+-type start_ret() :: {'ok', pid()} | 'ignore' | {'error', term()}.
 
 -record(state, {
-								supervisor :: undefined | pid(),
-								workers :: undefined | queue:queue(),
-								waiting :: queue:queue(),
-								monitors :: ets:tid(),
-								size = 5 :: non_neg_integer(),
-								overflow = 0 :: non_neg_integer(),
-								max_overflow = 10 :: non_neg_integer(),
-								strategy = lifo :: lifo | fifo
-							 }).
+    supervisor :: undefined | pid(),
+    workers :: undefined | queue:queue(),
+    waiting :: queue:queue(),
+    monitors :: ets:tid(),
+    size = 5 :: non_neg_integer(),
+    overflow = 0 :: non_neg_integer(),
+    max_overflow = 10 :: non_neg_integer(),
+    strategy = lifo :: lifo | fifo
+}).
 
+-spec checkout(Pool :: pool()) -> pid().
+checkout(Pool) ->
+    checkout(Pool, true).
 
+-spec checkout(Pool :: pool(), Block :: boolean()) -> pid() | full.
+checkout(Pool, Block) ->
+    checkout(Pool, Block, ?TIMEOUT).
 
-async(Fun) when erlang:is_function(Fun) ->
-		Me = erlang:self(),
-		Pid = checkout(?MODULE,true,infinity),
-    Ref = erlang:monitor(process, Pid),
-    erlang:send(Pid, {Me, Ref,{Fun,[]}}),
-   	{Pid, Ref}.
-async(Node,Fun) when erlang:is_function(Fun)
-										 andalso
-										 Node =:= node() ->
-
-		async(Fun);
-async(Node,Fun) when erlang:is_function(Fun) ->
-		Me = erlang:self(),
-		Pid = checkout({?MODULE,Node},true,infinity),
-		Ref = erlang:monitor(process, Pid),
-    erlang:send(Pid, {Me, Ref,{Fun,[]},group_leader()}),
-   	{Pid, Ref}.
-
-async(Mod,Fun,Args) ->
-		Me = erlang:self(),
-		Pid = checkout(?MODULE,true,infinity),
-    Ref = erlang:monitor(process, Pid),
-    erlang:send(Pid, {Me, Ref,{Mod,Fun,Args}}),
-   	{Pid, Ref}.
-async(Node,Mod,Fun,Args) when  Node =:= node() ->
-		async(Mod,Fun,Args);
-async(Node,Mod,Fun,Args) when erlang:is_function(Fun) ->
-		Me = erlang:self(),
-		Pid = checkout({?MODULE,Node},true,infinity),
-		Ref = erlang:monitor(process, Pid),
-    erlang:send(Pid, {Me, Ref,{Mod,Fun,Args},group_leader()}),
-   	{Pid, Ref}.
-
--spec await({pid(), reference()}) -> any() | no_return().
-await({Pid, Ref}) ->
-    await({Pid, Ref}, 5000).
-
--spec await({pid(), reference()},
-            non_neg_integer()) -> any() | no_return().
-await({Pid, Ref}, TimeOut) ->
-    receive
-        {Ref, Reply} ->
-            erlang:demonitor(Ref, [flush]),
-            Reply;
-        {'DOWN', Ref, _, _, noconnection} ->
-            erlang:exit({nodedown, erlang:node(Pid),
-                         {?MODULE, await, [{Pid, Ref}, TimeOut]}});
-        {'DOWN', Ref, _, _, Reason} ->
-            erlang:exit({Reason,
-                         {?MODULE, await, [{Pid, Ref}, TimeOut]}})
-    after TimeOut ->
-            erlang:demonitor(Ref, [flush]),
-            erlang:exit({timeout,
-                         {?MODULE, await, [{Pid, Ref}, TimeOut]}})
-    end.
-
--spec safe_await({pid(), reference()}, term()) -> any().
-safe_await(TaskRef, DefaultResult) ->
-    safe_await(TaskRef, DefaultResult, 5000).
-
--spec safe_await({pid(), reference()},
-                 term(), non_neg_integer()) -> any().
-safe_await(TaskRef, DefaultResult, TimeOut) ->
-    case catch await(TaskRef, TimeOut) of
-        {'EXIT', _} -> DefaultResult;
-        Any -> Any
-    end.
-
-
-checkin(Worker) when is_pid(Worker) ->
-    gen_server:cast(?MODULE, {checkin, Worker}).
-
--ifdef(OTP_RELEASE).
-checkout(Server,Block, Timeout) ->
+-spec checkout(Pool :: pool(), Block :: boolean(), Timeout :: timeout())
+    -> pid() | full.
+-ifdef(OTP_RELEASE). %% this implies 21 or higher
+checkout(Pool, Block, Timeout) ->
     CRef = make_ref(),
     try
-        gen_server:call(Server, {checkout, CRef, Block}, Timeout)
+        gen_server:call(Pool, {checkout, CRef, Block}, Timeout)
     catch
 				Class:Reason:Stacktrace ->
-            gen_server:cast(Server, {cancel_waiting, CRef}),
-            erlang:raise(Class, Reason,Stacktrace)
+            gen_server:cast(Pool, {cancel_waiting, CRef}),
+            erlang:raise(Class, Reason, Stacktrace)
     end.
 -else.
-checkout(Server,Block, Timeout) ->
+checkout(Pool, Block, Timeout) ->
     CRef = make_ref(),
     try
-        gen_server:call(Server, {checkout, CRef, Block}, Timeout)
+        gen_server:call(Pool, {checkout, CRef, Block}, Timeout)
     catch
 				Class:Reason ->
-            gen_server:cast(Server, {cancel_waiting, CRef}),
+            gen_server:cast(Pool, {cancel_waiting, CRef}),
             erlang:raise(Class, Reason, erlang:get_stacktrace())
     end.
 -endif.
 
-start_link(PoolArgs)->
-		gen_server:start_link({local,?MODULE}, ?MODULE,PoolArgs, []).
+-spec checkin(Pool :: pool(), Worker :: pid()) -> ok.
+checkin(Pool, Worker) when is_pid(Worker) ->
+    gen_server:cast(Pool, {checkin, Worker}).
 
-init(PoolArgs) ->
+-spec transaction(Pool :: pool(), Fun :: fun((Worker :: pid()) -> any()))
+    -> any().
+transaction(Pool, Fun) ->
+    transaction(Pool, Fun, ?TIMEOUT).
+
+-spec transaction(Pool :: pool(), Fun :: fun((Worker :: pid()) -> any()),
+    Timeout :: timeout()) -> any().
+transaction(Pool, Fun, Timeout) ->
+    Worker = ai_pool:checkout(Pool, true, Timeout),
+    try
+        Fun(Worker)
+    after
+        ok = ai_pool:checkin(Pool, Worker)
+    end.
+
+-spec pool_spec(PoolId :: term(), PoolArgs :: proplists:proplist())
+    -> supervisor:child_spec().
+pool_spec(PoolId, PoolArgs) ->
+    pool_spec(PoolId, PoolArgs, []).
+
+-spec pool_spec(PoolId :: term(),
+                 PoolArgs :: proplists:proplist(),
+                 WorkerArgs :: proplists:proplist())
+    -> supervisor:child_spec().
+pool_spec(PoolId, PoolArgs, WorkerArgs) ->
+    pool_spec(PoolId, PoolArgs, WorkerArgs, tuple).
+
+-spec pool_spec(PoolId :: term(),
+                 PoolArgs :: proplists:proplist(),
+                 WorkerArgs :: proplists:proplist(),
+                 ChildSpecFormat :: 'tuple' | 'map')
+    -> supervisor:child_spec().
+pool_spec(PoolId, PoolArgs, WorkerArgs, tuple) ->
+    {PoolId, {ai_pool, start_link, [PoolArgs, WorkerArgs]},
+     permanent, 5000, worker, [ai_pool]};
+pool_spec(PoolId, PoolArgs, WorkerArgs, map) ->
+    #{id => PoolId,
+      start => {ai_pool, start_link, [PoolArgs, WorkerArgs]},
+      restart => permanent,
+      shutdown => 5000,
+      type => worker,
+      modules => [ai_pool]}.
+
+-spec start(PoolArgs :: proplists:proplist())
+    -> start_ret().
+start(PoolArgs) ->
+    start(PoolArgs, PoolArgs).
+
+-spec start(PoolArgs :: proplists:proplist(),
+            WorkerArgs:: proplists:proplist())
+    -> start_ret().
+start(PoolArgs, WorkerArgs) ->
+    start_pool(start, PoolArgs, WorkerArgs).
+
+-spec start_link(PoolArgs :: proplists:proplist())
+    -> start_ret().
+start_link(PoolArgs)  ->
+    %% for backwards compatability, pass the pool args as the worker args as well
+    start_link(PoolArgs, PoolArgs).
+
+-spec start_link(PoolArgs :: proplists:proplist(),
+                 WorkerArgs:: proplists:proplist())
+    -> start_ret().
+start_link(PoolArgs, WorkerArgs)  ->
+    start_pool(start_link, PoolArgs, WorkerArgs).
+
+-spec stop(Pool :: pool()) -> ok.
+stop(Pool) ->
+    gen_server:call(Pool, stop).
+
+-spec status(Pool :: pool()) -> {atom(), integer(), integer(), integer()}.
+status(Pool) ->
+    gen_server:call(Pool, status).
+
+init({PoolArgs, WorkerArgs}) ->
     process_flag(trap_exit, true),
     Waiting = queue:new(),
     Monitors = ets:new(monitors, [private]),
-    {ok, Sup} = ai_pooled_task_worker_sup:start_link(),
-    init(PoolArgs, #state{waiting = Waiting, monitors = Monitors,supervisor = Sup}).
+    init(PoolArgs, WorkerArgs, #state{waiting = Waiting, monitors = Monitors}).
 
-init([{size, Size} | Rest], State) when is_integer(Size) ->
-    init(Rest, State#state{size = Size});
-init([{max_overflow, MaxOverflow} | Rest], State) when is_integer(MaxOverflow) ->
-    init(Rest, State#state{max_overflow = MaxOverflow});
-init([{strategy, lifo} | Rest], State) ->
-    init(Rest, State#state{strategy = lifo});
-init([{strategy, fifo} | Rest], State) ->
-    init(Rest, State#state{strategy = fifo});
-init([_ | Rest],State) ->
-    init(Rest, State);
-init([],#state{size = Size, supervisor = Sup} = State) ->
+init([{worker_module, Mod} | Rest], WorkerArgs, State) when is_atom(Mod) ->
+    {ok, Sup} = ai_pool_worker_sup:start_link(Mod, WorkerArgs),
+    init(Rest, WorkerArgs, State#state{supervisor = Sup});
+init([{size, Size} | Rest], WorkerArgs, State) when is_integer(Size) ->
+    init(Rest, WorkerArgs, State#state{size = Size});
+init([{max_overflow, MaxOverflow} | Rest], WorkerArgs, State) when is_integer(MaxOverflow) ->
+    init(Rest, WorkerArgs, State#state{max_overflow = MaxOverflow});
+init([{strategy, lifo} | Rest], WorkerArgs, State) ->
+    init(Rest, WorkerArgs, State#state{strategy = lifo});
+init([{strategy, fifo} | Rest], WorkerArgs, State) ->
+    init(Rest, WorkerArgs, State#state{strategy = fifo});
+init([_ | Rest], WorkerArgs, State) ->
+    init(Rest, WorkerArgs, State);
+init([], _WorkerArgs, #state{size = Size, supervisor = Sup} = State) ->
     Workers = prepopulate(Size, Sup),
     {ok, State#state{workers = Workers}}.
 
@@ -159,7 +181,7 @@ handle_cast({checkin, Pid}, State = #state{monitors = Monitors}) ->
 handle_cast({cancel_waiting, CRef}, State) ->
     case ets:match(State#state.monitors, {'$1', CRef, '$2'}) of
         [[Pid, MRef]] ->
-            erlang:demonitor(MRef, [flush]),
+            demonitor(MRef, [flush]),
             true = ets:delete(State#state.monitors, Pid),
             NewState = handle_checkin(Pid, State),
             {noreply, NewState};
@@ -265,11 +287,13 @@ terminate(_Reason, State) ->
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
--spec format_status(Opt :: normal | terminate,
-										Status :: list()) -> Status :: term().
-format_status(_Opt, Status) ->
-		Status.
-
+start_pool(StartFun, PoolArgs, WorkerArgs) ->
+    case proplists:get_value(name, PoolArgs) of
+        undefined ->
+            gen_server:StartFun(?MODULE, {PoolArgs, WorkerArgs}, []);
+        Name ->
+            gen_server:StartFun(Name, ?MODULE, {PoolArgs, WorkerArgs}, [])
+    end.
 
 new_worker(Sup) ->
     {ok, Pid} = supervisor:start_child(Sup, []),

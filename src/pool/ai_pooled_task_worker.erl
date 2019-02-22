@@ -7,10 +7,10 @@
 %%% Created : 22 Feb 2019 by David Gao <david@Davids-MacBook-Pro.local>
 %%%-------------------------------------------------------------------
 -module(ai_pooled_task_worker).
--export([start_link/0]).
+-export([start_link/1]).
 -export([loop/0]).
 
-start_link()-> 
+start_link(_)-> 
     Pid = proc_lib:spawn_link(?MODULE,loop,[]),
     {ok,Pid}.
 
