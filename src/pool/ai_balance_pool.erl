@@ -50,7 +50,7 @@ rand(Name)->
 -record(state, {}).
 
 init([]) ->
-    ai_pool_table = ets:new(ai_balance_pool, [ordered_set, 
+    ai_balance_pool = ets:new(ai_balance_pool, [ordered_set, 
         protected, named_table, {write_concurrency,false},{read_concurrency,true}]),
     {ok, #state{}}.
 
