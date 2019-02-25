@@ -33,7 +33,7 @@
                       {error, term()} |
                       ignore.
 start_link(Args) ->
-	case proplists:get_value(name,Args) of 
+	case maps:get(name,Args,undefined) of 
 			undefined -> supervisor:start_link(?MODULE,Args);
 			Name when erlang:is_tuple(Name) -> 
 				supervisor:start_link(Name,?MODULE,Args);
@@ -59,13 +59,14 @@ start_link(Args) ->
                         [ChildSpec :: supervisor:child_spec()]}} |
                   ignore.
 init(Args) ->
-		Strategy = proplists:get_value(strategy,Args,one_for_one),
-		Intensity = proplists:get_value(intensity,Args,5),
-		Period = proplists:get_value(period,Args,5),
-		SupFlags = #{strategy => Strategy,
-                 intensity => Intensity,
-                 period =>Period},
-		Children = proplists:get_value(children,Args,[]),
+		Children = maps:get(children,Args,[]),
+		SupFlags = maps:filter(fun(K,_V)-> 
+									(K /= name) and (K /= children)
+							end,Args),
+		% #{strategy => Strategy,
+    %   intensity => Intensity,
+    %   period =>Period},
+
     {ok, {SupFlags, Children}}.
 
 %%%===================================================================
