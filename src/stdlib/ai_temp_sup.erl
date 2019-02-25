@@ -65,7 +65,7 @@ init(Args) ->
 		SupFlags = #{strategy => Strategy,
                  intensity => Intensity,
                  period =>Period},
-		Children = maps:get(children,Args,[]),
+		Children = proplists:get_value(children,Args,[]),
     {ok, {SupFlags, Children}}.
 
 %%%===================================================================
