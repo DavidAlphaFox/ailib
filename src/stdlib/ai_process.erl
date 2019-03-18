@@ -56,12 +56,13 @@ demonitor_process(MRef,Monitors) when erlang:is_reference(MRef)->
    Monitors.
 
 least_busy(Pids) ->
-    Members = lists:map(fun(Pid) ->
-                [
+    Members = 
+			lists:map(fun(Pid) ->
+								[
                     {message_queue_len, Messages},
-                    {stack_size, StackSize}
-                ] = erlang:process_info(Pid, [message_queue_len, stack_size]),
-                {Pid, Messages, StackSize}
+                	  {memory,MemorySize}
+                ] = erlang:process_info(Pid, [message_queue_len,memory]),
+                {Pid, Messages, MemorySize}
             end, Pids),
     SortedMembers = lists:keysort(2, lists:keysort(3, Members)),
     case SortedMembers of
@@ -72,7 +73,7 @@ least_busy(Pids) ->
                 false ->
                     case lists:search(fun({Maybe,_M0,_S0})->
                             erlang:is_process_alive(Maybe)
-                        end,Tail) of 
+                        end,Tail) of
                             {value,{Found,_M0,_S0}} -> {ok,Found};
                             false -> {error, empty_process_group}
                     end
