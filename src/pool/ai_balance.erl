@@ -25,6 +25,8 @@
     name,
     supervisor,
     size,
+    delay,
+    delay_timers,
     workers
 }).
 
@@ -65,13 +67,18 @@ start_link(Name, PoolArgs, WorkerArgs) ->
 	ignore.
 init({Name,PoolArgs, WorkerArgs})->
     process_flag(trap_exit, true),
-    init(PoolArgs,WorkerArgs,#state{name = Name}).
+    init(PoolArgs,WorkerArgs,#state{
+                                name = Name, delay = 0,
+                                delay_timers = undefined
+                               }).
 init([{worker_module, Mod} | Rest], WorkerArgs, #state{name = Name} = State) when is_atom(Mod) ->
     %% 该进程挂了，会将所有进程全部挂掉
     {ok, Sup} = ai_balance_worker_sup:start_link(Name, Mod,WorkerArgs),
     init(Rest, WorkerArgs, State#state{supervisor = Sup});
 init([{size, Size} | Rest], WorkerArgs, State) when is_integer(Size) ->
     init(Rest, WorkerArgs, State#state{size = Size});
+init([{delay,Delay} | Rest], WorkerArgs, State) when is_integer(Delay) ->
+    init(Rest, WorkerArgs, State#state{delay = Delay, delay_timers = []});
 init([_ | Rest], WorkerArgs, State) ->
     init(Rest, WorkerArgs, State);
 init([], _WorkerArgs, #state{size = Size, supervisor = Sup} = State) ->
@@ -122,15 +129,28 @@ handle_cast(_Request, State) ->
 	{noreply, NewState :: term(), hibernate} |
     {stop, Reason :: normal | term(), NewState :: term()}.
 
-handle_info({'EXIT', Pid, _Reason}, #state{supervisor = Sup} =  State) ->
+handle_info({'EXIT', Pid, _Reason}, #state{supervisor = Sup, delay = 0, workers  = Workers} =  State) ->
     case lists:member(Pid, State#state.workers) of
         true ->
-            W = lists:filter(fun (P) -> P =/= Pid end, State#state.workers),
+            W = lists:filter(fun (P) -> P =/= Pid end, Workers),
             {noreply, State#state{workers = [new_worker(Sup) | W]}};
         false ->
             {noreply, State}
     end;
-
+handle_info({'EXIT', Pid, _Reason}, #state{delay = Delay, delay_timers = Timers,
+                                           workers = Workers} =  State)->
+    case lists:member(Pid, State#state.workers) of
+        true ->
+            W = lists:filter(fun (P) -> P =/= Pid end, Workers),
+            Timer = ai_timer:start(Delay,new_worker,ai_timer:new([async])),
+            {noreply, State#state{workers = W, delay_timers = [Timer | Timers]}};
+        false ->
+            {noreply, State}
+    end;
+handle_info({timeout,TimerRef,new_worker},#state{supervisor = Sup, delay_timers = Timers,
+                                                workers = Workers} = State)->
+    Timers1 = lists:filter(fun(T)-> ai_timer:is_current(TimerRef,T) =/= true end,Timers),
+    {noreply, State#state{workers = [new_worker(Sup)| Workers], delay_timers = Timers1}};
 handle_info(_Info, State) ->
 	{noreply, State}.
 
