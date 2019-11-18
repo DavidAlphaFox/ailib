@@ -4,15 +4,23 @@
 -export([is_current/2,is_previous/2]).
 
 
--record(ai_timer,{timeout,msg,prev_ref,ref,async,info}).
+-record(ai_timer,{
+                  timeout,
+                  msg,
+                  prev_ref,
+                  ref,
+                  async,
+                  info,
+                  abs}).
 
 new()-> #ai_timer{timeout = infinity,msg = undefined,prev_ref = undefined,
-                    ref = undefined,async = false,info = false}.
+                    ref = undefined,async = false,info = false,abs = false}.
 new(Opts) ->
     Timer =  new(),
     lists:foldl(fun(I,Acc)->
         if  I == info -> Acc#ai_timer{info = true};
             I == async -> Acc#ai_timer{async = true};
+            I == abs -> Acc#ai_timer{abs = true};
             true -> Acc
         end
     end,Timer,Opts).
@@ -25,9 +33,9 @@ cancel_internal(#ai_timer{async = Async,info = Info,ref = Ref} = Timer )->
             Timer#ai_timer{prev_ref = Ref,ref = undefined}
     end.
 
-start_internal(Timeout,TimeoutMsg,Timer)->
+start_internal(Timeout,TimeoutMsg,#ai_timer{ abs = ABS } = Timer)->
     Timer1 = cancel_internal(Timer),
-    Ref = erlang:start_timer(Timeout, self(), TimeoutMsg),
+    Ref = erlang:start_timer(Timeout, self(), TimeoutMsg,[{abs,ABS}]),
     Timer1#ai_timer{timeout = Timeout,msg = TimeoutMsg,ref = Ref}.
 
 check_rule(Timeout,TimeoutMsg)->
