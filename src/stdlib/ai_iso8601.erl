@@ -1,4 +1,4 @@
--module(iso8601).
+-module(ai_iso8601).
 
 -export([add_time/4,
          add_days/2,

@@ -1,6 +1,6 @@
 PROJECT = ailib
 PROJECT_DESCRIPTION = Base lib for products from ailink.io
-PROJECT_VERSION = 0.3.9
+PROJECT_VERSION = 0.4.0
 
 include erlang.mk
 
