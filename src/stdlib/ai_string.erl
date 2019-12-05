@@ -51,7 +51,7 @@ to_integer(Val) when erlang:is_list(Val) -> erlang:list_to_integer(Val);
 to_integer(Val) when erlang:is_integer(Val) -> Val.
 
 to_string(Val) when erlang:is_integer(Val) -> erlang:integer_to_binary(Val);
-to_string(Val) when erlang:is_float(Val) -> erlang:list_to_binary(io_lib:format("~p", [Val]));
+to_string(Val) when erlang:is_float(Val) -> erlang:list_to_binary(io_lib:format("~f", [Val]));
 to_string(Val) when erlang:is_boolean(Val) -> erlang:atom_to_binary(Val,latin1);
 to_string(Val) when erlang:is_atom(Val) -> erlang:atom_to_binary(Val,latin1);
 %% iolist场景
