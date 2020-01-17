@@ -2,6 +2,7 @@
 -export([demonitor_process/2,monitor_process/2]).
 -export([least_busy/1]).
 -export([global_process/1]).
+-export([get/2]).
 
 monitor_process(undefined,Monitors) -> Monitors;
 monitor_process(Pid,Monitors) when erlang:is_map(Monitors)->
@@ -89,3 +90,12 @@ global_process(Pid)->
         end,
     {Name,erlang:node(Pid)}.
 
+-spec get(term(),function())-> term().
+get(Key,Fun)->
+    case erlang:get(Key) of
+        undefined ->
+            R = erlang:apply(Fun,[]),
+            erlang:put(Key,R),
+            R;
+        Cached -> Cached
+    end.
