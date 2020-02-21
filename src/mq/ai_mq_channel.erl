@@ -38,6 +38,7 @@ handle_cast({From, subscribe, Timestamp, Subscriber}, State) ->
       _ -> Timestamp
     end,
   {NewSubscribers, LastPull} = pull_messages(ActualTimestamp, Subscriber, State),
+  %% 首先订阅者会得到这个消息，被订阅的Channel的Pid和最后一次拉取时间
   gen_server:reply(From, {ok, self(),LastPull}),
   {noreply, purge_old_messages(State#state{
                                  subscribers = NewSubscribers,last_pull = LastPull}),
@@ -50,8 +51,8 @@ handle_cast({From, pull, Timestamp}, State) ->
       last -> State#state.last_pull;
       _ -> Timestamp
     end,
-  ReturnMessages = messages_newer_than_timestamp(ActualTimestamp, State#state.messages),
   Now = erlang:system_time(millisecond),
+  ReturnMessages = ai_pq:collect(State#state.messages,ActualTimestamp),
   gen_server:reply(From, {ok,self(), Now, ReturnMessages}),
   {noreply, purge_old_messages(State#state{ last_pull = Now }),
    timer:seconds(State#state.max_age)};
@@ -73,7 +74,7 @@ handle_cast({From, push, Message}, State) ->
    timer:seconds(State#state.max_age)};
 
 handle_cast({From, now}, State) ->
-    gen_server:reply(From, {ok,self(),erlang:system_time(millisecond)}),
+  gen_server:reply(From, {ok,self(),erlang:system_time(millisecond)}),
   {noreply, purge_old_messages(State), timer:seconds(State#state.max_age)}.
 
 terminate(_Reason, _State) ->
@@ -92,16 +93,11 @@ handle_info({'DOWN', Ref, process, _Pid, _Reason}, State) ->
 handle_info(_Info, State) ->
     {noreply, State}.
 
-
-messages_newer_than_timestamp(Timestamp, Messages) ->
-  ai_pq:collect(Messages, Timestamp).
-
 purge_old_messages(State) ->
   Now = erlang:system_time(millisecond),
   LastPurge = State#state.last_purge,
-  Duration = timer:seconds(1),
   if
-    Now - LastPurge > Duration ->
+    Now - LastPurge > 1000 ->
       State#state{
         messages = ai_pq:prune(State#state.messages,
                          Now - timer:seconds(State#state.max_age)),
@@ -111,7 +107,7 @@ purge_old_messages(State) ->
 
 pull_messages(Timestamp, Subscriber, State) ->
   Now = erlang:system_time(millisecond),
-  case messages_newer_than_timestamp(Timestamp, State#state.messages) of
+  case ai_pq:collect(State#state.messages,Timestamp) of
     ReturnMessages when erlang:length(ReturnMessages) > 0 ->
       Subscriber ! {self(), Now, ReturnMessages},
       {State#state.subscribers, Now};

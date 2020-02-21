@@ -1,16 +1,21 @@
 -module(ai_mq_queue).
 
 -behaviour(gen_server).
+-compile({inline,[
+                  do_subscribe/3,
+                  do_pull/3,
+                  do_push/3,
+                  do_now/2
+                 ]}).
 
 -export([start_link/1]).
 -export([init/1, handle_call/3, handle_cast/2,
          handle_info/2, terminate/2, code_change/3]).
 
--export([new/0,new/1,new/2]).
--export([subscribe/3,pull/3,push/3,now/2]).
+-export([new/0,new/1,new/2,
+         subscribe/3,pull/3,push/3,now/2]).
 
 -define(PREFIX,"ai_mq_queue_").
-
 -record(state, {
                 max_age,
                 channels,
@@ -21,6 +26,7 @@
 new()->
   Opts = [],
   ai_mq_sup:new(Opts).
+
 -spec new(Name :: atom() | list() | binary())-> {ok,pid()}.
 new(Name)->
   Opts = [{name,ai_string:atom_prefix(Name,?PREFIX,false)}],
@@ -32,7 +38,8 @@ new(Name,MaxAge)->
           {max_age,MaxAge}],
   ai_mq_sup:new(Opts).
 
--spec subscribe(Queue::pid()|atom(),Channel::term(),Timestamp :: integer())-> ok.
+-spec subscribe(Queue::pid()|atom(),Channel::atom()|string()|binary(),
+                Timestamp :: integer())-> {ok,pid(),integer()}.
 subscribe(Queue,Channel,Timestamp) when erlang:is_pid(Queue) ->
   do_subscribe(Queue,Channel,Timestamp);
 subscribe(Queue,Channel,Timestamp) ->
@@ -43,6 +50,8 @@ do_subscribe(Queue,Channel,Timestamp)->
   Subscriber = self(),
   gen_server:call(Queue,{subscribe,Channel,Timestamp,Subscriber}).
 
+-spec pull(Queue::pid()|atom(),Channel::atom()|string()|binary(),
+           Timestamp :: integer())-> {ok,pid(),integer(),list()}.
 pull(Queue,Channel,Timestamp) when erlang:is_pid(Queue) ->
   do_pull(Queue,Channel,Timestamp);
 pull(Queue,Channel, Timestamp) ->
@@ -52,6 +61,8 @@ pull(Queue,Channel, Timestamp) ->
 do_pull(Queue,Channel,Timestamp)->
   gen_server:call(Queue, {pull, Channel, Timestamp}).
 
+-spec push(Queue::pid()|atom(),Channel::atom()|string()|binary(),
+           Message::term())-> {ok,pid(),integer()}.
 push(Queue,Channel,Message)when erlang:is_pid(Queue) ->
   do_push(Queue,Channel,Message);
 push(Queue,Channel,Message)->
@@ -60,6 +71,7 @@ push(Queue,Channel,Message)->
 do_push(Queue,Channel, Message) ->
   gen_server:call(Queue, {push, Channel, Message}).
 
+-spec now(Queue::pid()|atom(),Channel::atom()|string()|binary())->{ok,pid(),integer()}.
 now(Queue,Channel) when erlang:is_pid(Queue)->
   do_now(Queue,Channel);
 now(Queue,Channel) ->
@@ -143,10 +155,8 @@ code_change(_OldVsn, State, _Extra) ->
 handle_info(_Info, State) ->
     {noreply, State}.
 
-
 % internal
 server_name(Queue) -> ai_string:atom_prefix(Queue,?PREFIX,true).
-
 find_or_create_channel(Channel, #state{channels = Chan2Pid, max_age = MaxAge,rev_channels = Pid2Chan} = State) ->
   Self = self(),
   case maps:get(Channel, Chan2Pid,undefined) of
