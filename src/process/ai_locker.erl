@@ -15,22 +15,22 @@
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
-	terminate/2, code_change/3, format_status/2]).
+         terminate/2, code_change/3, format_status/2]).
 
 -export([new/1,new/2]).
 -export([try_lock/1,lock/1,release/1,wakeup/1]).
 
 -define(SERVER, ?MODULE).
--define(SUFFIX, "_ai_locker").
+-define(PREFIX, "ai_locker_").
 
 -record(state, {
-    total :: integer(),
-    avalible :: integer(),
-    queue :: queue:queue(),
-    waiters :: maps:maps(),
-    lockers :: list(),
-	monitors :: maps:maps()
-}).
+                total :: integer(),
+                avalible :: integer(),
+                queue :: queue:queue(),
+                waiters :: maps:maps(),
+                lockers :: list(),
+                monitors :: maps:maps()
+               }).
 
 %%%===================================================================
 %%% API 
@@ -38,54 +38,54 @@
 
 -spec new(Count :: integer())-> {ok,pid()}.
 new(Count)->
-	Opts = [{avalible,Count}],
-	ai_locker_sup:new(Opts).
+  Opts = [{avalible,Count}],
+  ai_locker_sup:new(Opts).
 -spec new(Name :: atom() | list(),Count :: integer())-> {ok,pid()}.
 new(Name,Count)->
-    Opts = [{avalible,Count},{name,ai_string:atom_suffix(Name,?SUFFIX,false)}],
-    ai_locker_sup:new(Opts).
+  Opts = [{avalible,Count},{name,ai_string:atom_prefix(Name,?PREFIX,false)}],
+  ai_locker_sup:new(Opts).
 -spec wakeup(Locker :: atom()|pid()) -> ok.
 wakeup(Locker) when is_pid(Locker)->
-    gen_server:cast(Locker,wakeup);
+  gen_server:cast(Locker,wakeup);
 wakeup(Locker) ->
-    gen_server:cast(server_name(Locker),wakeup).
+  gen_server:cast(server_name(Locker),wakeup).
 -spec lock(Locker :: pid()| atom()) -> ok.
 lock(Locker) when erlang:is_pid(Locker)->
-    do_lock(Locker);
+  do_lock(Locker);
 lock(Locker) ->
-    do_lock(server_name(Locker)).
+  do_lock(server_name(Locker)).
 -spec do_lock(Locker :: pid()| atom()) -> ok.
 do_lock(Locker)->
-    Caller = self(),
-    gen_server:call(Locker,{lock,Caller},infinity).
+  Caller = self(),
+  gen_server:call(Locker,{lock,Caller},infinity).
 
 -spec try_lock(Locker :: pid() | atom()) -> ok.
 try_lock(Locker) when erlang:is_pid(Locker) ->
-	do_try_lock(Locker);
+  do_try_lock(Locker);
 try_lock(Locker) ->
-	do_try_lock(server_name(Locker)).
+  do_try_lock(server_name(Locker)).
 -spec do_try_lock(Locker :: pid() | atom())-> ok | {error,locked}.
 do_try_lock(Locker)->
-	Caller = self(),
-	gen_server:call(Locker,{try_lock,Caller}).
+  Caller = self(),
+  gen_server:call(Locker,{try_lock,Caller}).
 -spec release(Locker :: atom() | pid()) -> ok.
 release(Locker) when erlang:is_pid(Locker)->
-    do_release(Locker);
+  do_release(Locker);
 release(Locker) ->
-    do_release(server_name(Locker)).
+  do_release(server_name(Locker)).
 -spec do_release(Locker :: atom() | pid()) -> ok.
 do_release(Locker)->
-	Caller = self(),
-	gen_server:cast(Locker,{release,Caller}).
+  Caller = self(),
+  gen_server:cast(Locker,{release,Caller}).
 %%--------------------------------------------------------------------
 %% @doc
 %% Starts the server
 %% @end
 %%--------------------------------------------------------------------
 -spec start_link(Opts :: proplists:proplists()) -> {ok, Pid :: pid()} |
-	{error, Error :: {already_started, pid()}} |
-	{error, Error :: term()} |
-	ignore.
+        {error, Error :: {already_started, pid()}} |
+        {error, Error :: term()} |
+        ignore.
 start_link(Opts) ->
     Name = proplists:get_value(name,Opts),
     case Name of
@@ -94,9 +94,9 @@ start_link(Opts) ->
     end.
 
 -spec start_link(Name :: atom(),Opts :: proplists:proplists()) -> {ok, Pid :: pid()} |
-											{error, Error :: {already_started, pid()}} |
-											{error, Error :: term()} |
-											ignore.
+        {error, Error :: {already_started, pid()}} |
+        {error, Error :: term()} |
+        ignore.
 start_link(Name,Opts) ->
 	gen_server:start_link({local,Name}, ?MODULE, Opts, []).
 %%%===================================================================
@@ -240,83 +240,83 @@ format_status(_Opt, Status) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-server_name(Locker)-> ai_string:atom_suffix(Locker,?SUFFIX,true).
+server_name(Locker)-> ai_string:atom_prefix(Locker,?PREFIX,true).
 
 processor_down(Pid,#state{queue = W,lockers = L} = State)->
-    case queue:member(Pid,W) of
-        true -> remove_waiter(Pid,State);
-        _ ->
-            case lists:member(Pid,L) of 
-                true -> release(Pid,State);
-                false -> State
-            end
-    end.
+  case queue:member(Pid,W) of
+    true -> remove_waiter(Pid,State);
+    _ ->
+      case lists:member(Pid,L) of
+        true -> release(Pid,State);
+        false -> State
+      end
+  end.
 
 release(Caller,#state{total = Total,avalible = Avalible,queue = W,
-    lockers = L,monitors = M} = State)->
-    M2 = ai_process:demonitor_process(Caller,M),
-    L2 = lists:filter(fun(I)-> I /= Caller end,L),
-    if 
-        Total - Avalible > 0 -> notify_waiters(W,State#state{lockers = L2 , monitors = M2});
-        true -> State
-    end.
+                      lockers = L,monitors = M} = State)->
+  M2 = ai_process:demonitor_process(Caller,M),
+  L2 = lists:filter(fun(I)-> I /= Caller end,L),
+  if
+    Total - Avalible > 0 -> notify_waiters(W,State#state{lockers = L2 , monitors = M2});
+    true -> State
+  end.
 remove_waiter(Caller,#state{queue = W,waiters = WM,monitors = M} = State)->
-    M2 = ai_process:demonitor_process(Caller,M),
-    State#state{
-        queue = queue:filter(fun(I)-> I /= Caller end,W),
-        waiters = maps:remove(Caller,WM),
-        monitors = M2
-    }.
-
+  M2 = ai_process:demonitor_process(Caller,M),
+  State#state{
+    queue = queue:filter(fun(I)-> I /= Caller end,W),
+    waiters = maps:remove(Caller,WM),
+    monitors = M2
+   }.
 
 notify_waiters(Q,State) ->
-    case queue:out(Q) of
-        {{value, Waiter}, Q2}-> notify_waiter(Waiter,Q2,State);
-        {empty,Q} -> State#state{avalible = State#state.avalible + 1}
-    end.
+  case queue:out(Q) of
+    {{value, Waiter}, Q2}-> notify_waiter(Waiter,Q2,State);
+    {empty,Q} -> State#state{avalible = State#state.avalible + 1}
+  end.
 notify_waiter(Caller,Q2,#state{waiters = WM,lockers = L,monitors = M } = State) ->
     %% 某个进程崩溃信息可能晚于Locker释放的时间
-    case erlang:is_process_alive(Caller) of
-        true ->
-            From = maps:get(Caller,WM),
-            gen_server:reply(From,lock),
-            State#state{
-                queue = Q2, 
-                waiters = maps:remove(Caller,WM),
-                lockers = [Caller|L]
-            };
-        _ ->
-            M2 = ai_process:demonitor(Caller,M),
-            notify_waiters(Q2,State#state{
-                                queue = Q2,
-                                waiters = maps:remove(Caller,WM),
-                                monitors = M2})
-    end.
+  case erlang:is_process_alive(Caller) of
+    true ->
+      From = maps:get(Caller,WM),
+      gen_server:reply(From,lock),
+      State#state{
+        queue = Q2,
+        waiters = maps:remove(Caller,WM),
+        lockers = [Caller|L]
+       };
+    _ ->
+      M2 = ai_process:demonitor(Caller,M),
+      notify_waiters(Q2,State#state{
+                          queue = Q2,
+                          waiters = maps:remove(Caller,WM),
+                          monitors = M2})
+  end.
+
 lock(Caller,#state{avalible = Avalible,lockers = L, monitors = M} = State)->
-    case lists:member(Caller,L) of
-        false ->
-            M2 = ai_process:monitor_process(Caller,M),
-            {lock,State#state{
-                avalible = Avalible - 1,
-                lockers = [Caller | L],
-                monitors = M2
-            }};
-        true -> {{error,already_lock},State}
-    end.
+  case lists:member(Caller,L) of
+    false ->
+      M2 = ai_process:monitor_process(Caller,M),
+      {lock,State#state{
+              avalible = Avalible - 1,
+              lockers = [Caller | L],
+              monitors = M2
+             }};
+    true -> {{error,already_lock},State}
+  end.
 wait(Caller,From,#state{queue = W,waiters = WM, monitors = M } = State)->
-    M2 = ai_process:monitor_process(Caller,M),
-    State#state{
-        queue = queue:in(Caller,W),
-        waiters = maps:put(Caller,From,WM),
-        monitors = M2
-    }.
+  M2 = ai_process:monitor_process(Caller,M),
+  State#state{
+    queue = queue:in(Caller,W),
+    waiters = maps:put(Caller,From,WM),
+    monitors = M2
+   }.
 wakeup(Q,State) ->
-    case queue:out(Q) of
-        {{value, Waiter}, Q2}-> wakeup(Waiter,Q2,State);
-        {empty,Q} -> State#state{queue = Q}
-    end.
+  case queue:out(Q) of
+    {{value, Waiter}, Q2}-> wakeup(Waiter,Q2,State);
+    {empty,Q} -> State#state{queue = Q}
+  end.
 wakeup(Caller,Q2,#state{waiters = WM,monitors = M } = State) ->
-    From = maps:get(Caller,WM),
-    M2 = ai_process:demonitor(Caller,M),
-    gen_server:reply(From,wakeup),
-    wakeup(Q2,State#state{queue = Q2,waiters = maps:remove(Caller,WM),monitors = M2}).
+  From = maps:get(Caller,WM),
+  M2 = ai_process:demonitor(Caller,M),
+  gen_server:reply(From,wakeup),
+  wakeup(Q2,State#state{queue = Q2,waiters = maps:remove(Caller,WM),monitors = M2}).

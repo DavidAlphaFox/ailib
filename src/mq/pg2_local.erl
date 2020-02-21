@@ -62,32 +62,29 @@
 %%%
 
 start_link() ->
-    gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
+  gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
-start() ->
-    ensure_started().
+start() -> ensure_started().
 
 join(Name, Pid) when is_pid(Pid) ->
-    gen_server:cast(?MODULE, {join, Name, Pid}).
+  gen_server:cast(?MODULE, {join, Name, Pid}).
 
 leave(Name, Pid) when is_pid(Pid) ->
-    gen_server:cast(?MODULE, {leave, Name, Pid}).
+  gen_server:cast(?MODULE, {leave, Name, Pid}).
 
-get_members(Name) ->
-    group_members(Name).
+get_members(Name) -> group_members(Name).
 
 in_group(Name, Pid) ->
-    %% The join message is a cast and thus can race, but we want to
-    %% keep it that way to be fast in the common case.
-    case member_present(Name, Pid) of
-        true  -> true;
-        false -> 
-            sync(),
-            member_present(Name, Pid)
-    end.
+  %% The join message is a cast and thus can race, but we want to
+  %% keep it that way to be fast in the common case.
+  case member_present(Name, Pid) of
+    true  -> true;
+    false ->
+      sync(),
+      member_present(Name, Pid)
+  end.
 
-sync() ->
-    gen_server:call(?MODULE, sync, infinity).
+sync() -> gen_server:call(?MODULE, sync, infinity).
 
 %%%
 %%% Callback functions from gen_server
@@ -155,73 +152,71 @@ member_died(Ref) ->
 %% 先监控，再进入组
 join_group(Name, Pid) ->
     Ref_Pid = {ref, Pid}, 
-		%% 先尝试 +1 如果 +1 失败
-		%% 说明pid不在ets表中，那么需要先Monitor再添加
-    try _ = ets:update_counter(pg2_local_table, Ref_Pid, {3, +1})
-    catch _:_ ->
-            Ref = erlang:monitor(process, Pid),
-            true = ets:insert(pg2_local_table, {Ref_Pid, Ref, 1}),
-            true = ets:insert(pg2_local_table, {{ref, Ref}, Pid})
-    end,
-    Member_Name_Pid = {member, Name, Pid},
-    try _ = ets:update_counter(pg2_local_table, Member_Name_Pid, {2, +1})
-    catch _:_ ->
-            true = ets:insert(pg2_local_table, {Member_Name_Pid, 1}),
-            true = ets:insert(pg2_local_table, {{pid, Pid, Name}})
-    end.
+  %% 先尝试 +1 如果 +1 失败
+  %% 说明pid不在ets表中，那么需要先Monitor再添加
+  try _ = ets:update_counter(pg2_local_table, Ref_Pid, {3, +1})
+  catch _:_ ->
+      Ref = erlang:monitor(process, Pid),
+      true = ets:insert(pg2_local_table, {Ref_Pid, Ref, 1}),
+      true = ets:insert(pg2_local_table, {{ref, Ref}, Pid})
+  end,
+  Member_Name_Pid = {member, Name, Pid},
+  try _ = ets:update_counter(pg2_local_table, Member_Name_Pid, {2, +1})
+  catch _:_ ->
+      true = ets:insert(pg2_local_table, {Member_Name_Pid, 1}),
+      true = ets:insert(pg2_local_table, {{pid, Pid, Name}})
+  end.
 %% 先退组,再退监控
 leave_group(Name, Pid) ->
-    Member_Name_Pid = {member, Name, Pid},
-	%% 先减少1
-    try ets:update_counter(pg2_local_table, Member_Name_Pid, {2, -1}) of
-        N ->
-            if 
-                N =:= 0 ->
-					%% 到0了，那么我们就删掉表项
-                    true = ets:delete(pg2_local_table, {pid, Pid, Name}),
-                    true = ets:delete(pg2_local_table, Member_Name_Pid);
-                true ->
-                    ok
-            end,
-            Ref_Pid = {ref, Pid}, 
-            case ets:update_counter(pg2_local_table, Ref_Pid, {3, -1}) of
-                0 ->
-                    [{Ref_Pid,Ref,0}] = ets:lookup(pg2_local_table, Ref_Pid),
-                    true = ets:delete(pg2_local_table, {ref, Ref}),
-                    true = ets:delete(pg2_local_table, Ref_Pid),
-                    true = erlang:demonitor(Ref, [flush]),
-                    ok;
-                _ ->
-                    ok
-            end
-    catch _:_ ->
-            ok
-    end.
+  Member_Name_Pid = {member, Name, Pid},
+  %% 先减少1
+  try ets:update_counter(pg2_local_table, Member_Name_Pid, {2, -1}) of
+      N ->
+      if
+        N =:= 0 ->
+          %% 到0了，那么我们就删掉表项
+          true = ets:delete(pg2_local_table, {pid, Pid, Name}),
+          true = ets:delete(pg2_local_table, Member_Name_Pid);
+        true -> ok
+      end,
+      Ref_Pid = {ref, Pid},
+      case ets:update_counter(pg2_local_table, Ref_Pid, {3, -1}) of
+        0 ->
+          [{Ref_Pid,Ref,0}] = ets:lookup(pg2_local_table, Ref_Pid),
+          true = ets:delete(pg2_local_table, {ref, Ref}),
+          true = ets:delete(pg2_local_table, Ref_Pid),
+          true = erlang:demonitor(Ref, [flush]),
+          ok;
+        _ -> ok
+      end
+  catch _:_ ->
+      ok
+  end.
 %% 直接从表中找
 group_members(Name) ->
-    [P || 
-        [P, N] <- ets:match(pg2_local_table, {{member, Name, '$1'},'$2'}),
-        _ <- lists:seq(1, N)].
+  [P ||
+    [P, N] <- ets:match(pg2_local_table, {{member, Name, '$1'},'$2'}),
+    _ <- lists:seq(1, N)].
 
 member_in_group(Pid, Name) ->
-    [{{member, Name, Pid}, N}] = ets:lookup(pg2_local_table, {member, Name, Pid}),
-    lists:duplicate(N, Pid).
+  [{{member, Name, Pid}, N}] = ets:lookup(pg2_local_table, {member, Name, Pid}),
+  lists:duplicate(N, Pid).
 
 member_present(Name, Pid) ->
-    case ets:lookup(pg2_local_table, {member, Name, Pid}) of
-        [_] -> true;
-        []  -> false
-    end.
+  case ets:lookup(pg2_local_table, {member, Name, Pid}) of
+    [_] -> true;
+    []  -> false
+  end.
 
 member_groups(Pid) ->
-    [Name || [Name] <- ets:match(pg2_local_table, {{pid, Pid, '$1'}})].
+  [Name || [Name] <- ets:match(pg2_local_table, {{pid, Pid, '$1'}})].
 
 ensure_started() ->
-    case whereis(?MODULE) of
-        undefined ->
-            C = {pg2_local, {?MODULE, start_link, []}, permanent,
-                 16#ffffffff, worker, [?MODULE]},
-            supervisor:start_child(kernel_safe_sup, C);
-        PgLocalPid ->
-            {ok, PgLocalPid}
-    end.
+  case whereis(?MODULE) of
+    undefined ->
+      C = {pg2_local, {?MODULE, start_link, []}, permanent,
+           16#ffffffff, worker, [?MODULE]},
+      supervisor:start_child(kernel_safe_sup, C);
+    PgLocalPid ->
+      {ok, PgLocalPid}
+  end.
