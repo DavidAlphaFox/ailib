@@ -96,10 +96,11 @@ start_link(Opts) ->
         {error, Error :: term()} |
         ignore.
 start_link(Name,Opts) ->
-	gen_server:start_link({local,Name}, ?MODULE, Opts, []).
+  gen_server:start_link({local,Name}, ?MODULE, Opts, []).
 
 
 init(Args) ->
+  process_flag(trap_exit,true),
   MaxAgeSeconds = proplists:get_value(max_age,Args,60),
   {ok, #state{
           max_age = MaxAgeSeconds,
