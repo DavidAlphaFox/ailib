@@ -5,7 +5,6 @@
 -export([md5_string/2,sha_string/2,sha256_string/2,sha512_string/2]).
 -export([string_to_hex/2,hash_to_string/3]).
 -export([atom_suffix/3,atom_prefix/3,join/2]).
--export([dynamic_module/2]).
 -export([html_escape/1,html_unescape/1]).
 -export([to_iolist/1]).
 
@@ -27,11 +26,6 @@ html_unescape(Str)->
   lists:foldr(fun({Replace,El},Acc)->
                   re:replace(Acc,El,Replace,[global,{return,binary}])
               end,BinStr,?HTML_ESCAPE).
--spec dynamic_module(Name :: list(),Content :: list())->  {module,  atom()} | {error, term()}.
-dynamic_module(Name,Content)->
-    {Mod, Code} = ai_dynamic_compile:from_string(Content),
-    code:load_binary(Mod, Name, Code).
-
 
 to_boolean(<<"true">>) -> true;
 to_boolean(<<"false">>) -> false;
