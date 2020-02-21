@@ -21,15 +21,14 @@ init([MaxAge, Manager, Channel]) ->
           messages = gb_trees:empty(),
           last_pull = Now,
           last_purge = Now },
-   MaxAge * 1000}.
+   timer:seconds(MaxAge)}.
 
-handle_call(_From, _, State) ->
-    {noreply, State}.
+handle_call(_From, _, State) -> {noreply, State}.
 
 handle_cast({From, subscribe, now, Subscriber}, State) ->
-    NewSubscribers = add_subscriber(Subscriber, State#state.subscribers),
-    gen_server:reply(From, {ok,self(),erlang:system_time(millisecond)}),
-    {noreply, purge_old_messages(State#state{ subscribers = NewSubscribers })};
+  NewSubscribers = add_subscriber(Subscriber, State#state.subscribers),
+  gen_server:reply(From, {ok,self(),erlang:system_time(millisecond)}),
+  {noreply, purge_old_messages(State#state{ subscribers = NewSubscribers })};
 
 handle_cast({From, subscribe, Timestamp, Subscriber}, State) ->
   ActualTimestamp =
@@ -40,8 +39,9 @@ handle_cast({From, subscribe, Timestamp, Subscriber}, State) ->
     end,
   {NewSubscribers, LastPull} = pull_messages(ActualTimestamp, Subscriber, State),
   gen_server:reply(From, {ok, self(),LastPull}),
-  {noreply, purge_old_messages(State#state{ subscribers = NewSubscribers,
-                                            last_pull = LastPull}), State#state.max_age * 1000};
+  {noreply, purge_old_messages(State#state{
+                                 subscribers = NewSubscribers,last_pull = LastPull}),
+   timer:seconds(State#state.max_age)};
 
 handle_cast({From, pull, Timestamp}, State) ->
   ActualTimestamp =
@@ -53,24 +53,28 @@ handle_cast({From, pull, Timestamp}, State) ->
   ReturnMessages = messages_newer_than_timestamp(ActualTimestamp, State#state.messages),
   Now = erlang:system_time(millisecond),
   gen_server:reply(From, {ok,self(), Now, ReturnMessages}),
-  {noreply, purge_old_messages(State#state{ last_pull = Now }), State#state.max_age * 1000};
+  {noreply, purge_old_messages(State#state{ last_pull = Now }),
+   timer:seconds(State#state.max_age)};
+
 
 handle_cast({From, push, Message}, State) ->
   Now = erlang:system_time(millisecond),
-  LastPull = lists:foldr(
-               fun({Ref, Sub}, _) ->
-                   Sub ! {self(), Now, [Message]},
-                   erlang:demonitor(Ref),
-                   Now
-               end, State#state.last_pull, State#state.subscribers),
-  gen_server:reply(From, {ok,self(), Now}),
+  %% 遍历所有的订阅者，发送该消息
+  lists:foreach(
+    fun({Ref, Sub}) ->
+        Sub ! {self(), Now, [Message]},
+        erlang:demonitor(Ref)
+    end, State#state.subscribers),
+  gen_server:reply(From, {ok, self(), Now}),
   State2 = purge_old_messages(State),
   NewMessages = ai_pq:add(Now, Message, State2#state.messages),
-  {noreply, State2#state{messages = NewMessages, subscribers = [], last_pull = LastPull}, State#state.max_age * 1000};
+  %% 清空所有的订阅者
+  {noreply, State2#state{messages = NewMessages, subscribers = [], last_pull = Now},
+   timer:seconds(State#state.max_age)};
 
 handle_cast({From, now}, State) ->
     gen_server:reply(From, {ok,self(),erlang:system_time(millisecond)}),
-    {noreply, purge_old_messages(State), State#state.max_age * 1000}.
+  {noreply, purge_old_messages(State), timer:seconds(State#state.max_age)}.
 
 terminate(_Reason, _State) ->
     ok.
@@ -82,7 +86,7 @@ handle_info(timeout, #state{manager = Manager,subscribers = [] } = State) ->
     gen_server:cast(Manager, {expire, State#state.channel}),
     {stop, normal, State};
 handle_info(timeout, State) ->
-    {noreply, State, State#state.max_age * 1000};
+  {noreply, State, timer:seconds(State#state.max_age)};
 handle_info({'DOWN', Ref, process, _Pid, _Reason}, State) ->
     handle_info(timeout, State#state{ subscribers = proplists:delete(Ref, State#state.subscribers) });
 handle_info(_Info, State) ->
@@ -90,70 +94,37 @@ handle_info(_Info, State) ->
 
 
 messages_newer_than_timestamp(Timestamp, Messages) ->
-    collect(fun(V, Acc) -> [V|Acc] end, [], Messages, Timestamp).
+  ai_pq:collect(Messages, Timestamp).
 
 purge_old_messages(State) ->
-    Now = erlang:system_time(millisecond),
-    LastPurge = State#state.last_purge,
-    Duration = timer:seconds(1),
-    if
-        Now - LastPurge > Duration ->
-            State#state{
-                messages = prune(State#state.messages,
-                    Now - timer:seconds(State#state.max_age)),
-                last_purge = Now };
-        true ->
-            State
-    end.
+  Now = erlang:system_time(millisecond),
+  LastPurge = State#state.last_purge,
+  Duration = timer:seconds(1),
+  if
+    Now - LastPurge > Duration ->
+      State#state{
+        messages = ai_pq:prune(State#state.messages,
+                         Now - timer:seconds(State#state.max_age)),
+        last_purge = Now };
+    true -> State
+  end.
 
 pull_messages(Timestamp, Subscriber, State) ->
-    Now = erlang:system_time(millisecond),
-    case messages_newer_than_timestamp(Timestamp, State#state.messages) of
-        ReturnMessages when erlang:length(ReturnMessages) > 0 ->
-            Subscriber ! {self(), Now, ReturnMessages},
-            {State#state.subscribers, Now};
-        _ ->
-            {add_subscriber(Subscriber, State#state.subscribers), Now}
-    end.
+  Now = erlang:system_time(millisecond),
+  case messages_newer_than_timestamp(Timestamp, State#state.messages) of
+    ReturnMessages when erlang:length(ReturnMessages) > 0 ->
+      Subscriber ! {self(), Now, ReturnMessages},
+      {State#state.subscribers, Now};
+    _ ->
+      {add_subscriber(Subscriber, State#state.subscribers), Now}
+  end.
 
-% Checks if the new subscriber pid already has a monitor
+% CHecks if the new subscriber pid already has a monitor
 add_subscriber(NewSubscriber, Subscribers) ->
-        case lists:keymember(NewSubscriber, 2, Subscribers) of
+  case lists:keymember(NewSubscriber, 2, Subscribers) of
 		true -> Subscribers;
 		false -> [{erlang:monitor(process, NewSubscriber), NewSubscriber} | Subscribers]
-    end.
-    
+  end.
 
 
-%% @spec collect(Function, Acc0, Tree, Priority) -> Acc1
-%% @doc Fold over values with priority greater than `Priority'
-collect(Function, Acc0, {_Size, TreeNode}, Priority) ->
-    Acc1 = iterate_nonexpired_nodes(Function, Acc0, TreeNode, Priority),
-    Acc1.
 
-%% @spec prune(Tree, Priority) -> Tree1
-%% @doc Remove nodes with priority less than or equal to `Priority'
-prune({Size, TreeNode}, Priority) ->
-    {Tree1, NumDeleted} = prune_expired_nodes(TreeNode, Priority),
-    {Size - NumDeleted, Tree1}.
-
-
-iterate_nonexpired_nodes(Function, State, {K, V, S, L}, Now) when K > Now ->
-    Acc1 = iterate_nonexpired_nodes(Function, State, L, Now),
-    Acc2 = lists:foldr(Function, Acc1, V),
-    iterate_nonexpired_nodes(Function, Acc2, S, Now);
-iterate_nonexpired_nodes(Function, State, {K, _V, _S, L}, Now) when K =< Now ->
-    iterate_nonexpired_nodes(Function, State, L, Now);
-iterate_nonexpired_nodes(_Function, State, nil, _Now) ->
-    State.
-
-
-prune_expired_nodes({K, V, S, L}, Now) when K > Now ->
-    {Tree1, NumDeleted} = prune_expired_nodes(S, Now),
-    {{K, V, Tree1, L}, NumDeleted};
-prune_expired_nodes({K, _V, S, L}, Now) when K =< Now ->
-    {_, NumDeleted_S} = prune_expired_nodes(S, Now),
-    {Tree1, NumDeleted_L} = prune_expired_nodes(L, Now),
-    {Tree1, NumDeleted_S + NumDeleted_L + 1};
-prune_expired_nodes(nil, _Now) ->
-    {nil, 0}.
