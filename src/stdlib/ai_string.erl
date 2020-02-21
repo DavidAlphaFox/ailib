@@ -14,18 +14,19 @@
                      {"=","\\&#x3D;"},
                      {"`","\\&#x60;"} %% delimiter in IE
                     ]).
-
-
 html_escape(Str)->
   BinStr = to_string(Str),
-  lists:foldl(fun({El,Replace},Acc)->
-                  re:replace(Acc,El,Replace,[global,{return,binary}])
-              end,BinStr,?HTML_ESCAPE).
+  lists:foldl(
+    fun({El,Replace},Acc)->
+        re:replace(Acc,El,Replace,[global,{return,binary}])
+    end,BinStr,?HTML_ESCAPE).
+
 html_unescape(Str)->
   BinStr = to_string(Str),
-  lists:foldr(fun({Replace,El},Acc)->
-                  re:replace(Acc,El,Replace,[global,{return,binary}])
-              end,BinStr,?HTML_ESCAPE).
+  lists:foldr(
+    fun({Replace,El},Acc)->
+        re:replace(Acc,El,Replace,[global,{return,binary}])
+    end,BinStr,?HTML_ESCAPE).
 
 to_boolean(<<"true">>) -> true;
 to_boolean(<<"false">>) -> false;
