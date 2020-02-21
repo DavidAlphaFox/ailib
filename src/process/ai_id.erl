@@ -56,7 +56,7 @@ next_id(Server)->
 
 init(Partition)->
   timer:sleep(1),
-  TS = stamp(),
+  TS = timestamp(),
   PartitionBinary = <<Partition:10/integer-unsigned>>,
   {ok,#state{
          partition = PartitionBinary,
@@ -90,14 +90,14 @@ code_change(_Old, State, _Extra) ->
 %%%
 %%% inner functions
 %%%
-stamp()-> erlang:system_time(millisecond) - ?EPOCH.
+timestamp()-> erlang:system_time(millisecond) - ?EPOCH.
 next_seq(Now,Seq)->
   case (Seq + 1) rem 4096 of
     0 -> exhausted;
     NewSeq -> {ok,Now,NewSeq}
   end.
 try_next_seq(Time, Seq) ->
-  Now = stamp(),
+  Now = timestamp(),
   if
     Now =:= Time -> next_seq(Now,Seq);% Time is essentially equal at the millisecond
     Now < Time ->backwards_clock; % Woops, clock was moved backwards by NTP

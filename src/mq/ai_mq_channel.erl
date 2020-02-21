@@ -13,59 +13,63 @@ start_link(MaxAge, Manager, Channel) ->
     gen_server:start_link(?MODULE, [MaxAge, Manager, Channel], []).
 
 init([MaxAge, Manager, Channel]) ->
-    {ok, #state{
-            max_age = MaxAge,
-            manager = Manager,
-            channel = Channel,
-            messages = gb_trees:empty(),
-            last_pull = now_to_micro_seconds(os:timestamp()),
-            last_purge = now_to_micro_seconds(os:timestamp()) },
-     MaxAge * 1000}.
+  Now = erlang:system_time(millisecond),
+  {ok, #state{
+          max_age = MaxAge,
+          manager = Manager,
+          channel = Channel,
+          messages = gb_trees:empty(),
+          last_pull = Now,
+          last_purge = Now },
+   MaxAge * 1000}.
 
 handle_call(_From, _, State) ->
     {noreply, State}.
 
 handle_cast({From, subscribe, now, Subscriber}, State) ->
     NewSubscribers = add_subscriber(Subscriber, State#state.subscribers),
-    gen_server:reply(From, {ok,self(),now_to_micro_seconds(os:timestamp())}),
+    gen_server:reply(From, {ok,self(),erlang:system_time(millisecond)}),
     {noreply, purge_old_messages(State#state{ subscribers = NewSubscribers })};
 
 handle_cast({From, subscribe, Timestamp, Subscriber}, State) ->
-    ActualTimestamp = case Timestamp of
-        last -> State#state.last_pull;
-        undefined -> 0;
-        _ -> Timestamp
+  ActualTimestamp =
+    case Timestamp of
+      last -> State#state.last_pull;
+      undefined -> 0;
+      _ -> Timestamp
     end,
-    {NewSubscribers, LastPull} = pull_messages(ActualTimestamp, Subscriber, State),
-    gen_server:reply(From, {ok, self(),LastPull}),
-    {noreply, purge_old_messages(State#state{ subscribers = NewSubscribers,
-                last_pull = LastPull}), State#state.max_age * 1000};
+  {NewSubscribers, LastPull} = pull_messages(ActualTimestamp, Subscriber, State),
+  gen_server:reply(From, {ok, self(),LastPull}),
+  {noreply, purge_old_messages(State#state{ subscribers = NewSubscribers,
+                                            last_pull = LastPull}), State#state.max_age * 1000};
 
 handle_cast({From, pull, Timestamp}, State) ->
-    ActualTimestamp = case Timestamp of
-        undefined -> 0;
-        last -> State#state.last_pull;
-        _ -> Timestamp
+  ActualTimestamp =
+    case Timestamp of
+      undefined -> 0;
+      last -> State#state.last_pull;
+      _ -> Timestamp
     end,
-    ReturnMessages = messages_newer_than_timestamp(ActualTimestamp, State#state.messages),
-    Now = now_to_micro_seconds(os:timestamp()),
-    gen_server:reply(From, {ok,self(), Now, ReturnMessages}),
-    {noreply, purge_old_messages(State#state{ last_pull = Now }), State#state.max_age * 1000};
+  ReturnMessages = messages_newer_than_timestamp(ActualTimestamp, State#state.messages),
+  Now = erlang:system_time(millisecond),
+  gen_server:reply(From, {ok,self(), Now, ReturnMessages}),
+  {noreply, purge_old_messages(State#state{ last_pull = Now }), State#state.max_age * 1000};
 
 handle_cast({From, push, Message}, State) ->
-    Now = now_to_micro_seconds(os:timestamp()),
-    LastPull = lists:foldr(fun({Ref, Sub}, _) ->
-                Sub ! {self(), Now, [Message]},
-                erlang:demonitor(Ref),
-                Now
-        end, State#state.last_pull, State#state.subscribers),
-    gen_server:reply(From, {ok,self(), Now}),
-    State2 = purge_old_messages(State),
-    NewMessages = ai_pq:add(Now, Message, State2#state.messages),
-    {noreply, State2#state{messages = NewMessages, subscribers = [], last_pull = LastPull}, State#state.max_age * 1000};
+  Now = erlang:system_time(millisecond),
+  LastPull = lists:foldr(
+               fun({Ref, Sub}, _) ->
+                   Sub ! {self(), Now, [Message]},
+                   erlang:demonitor(Ref),
+                   Now
+               end, State#state.last_pull, State#state.subscribers),
+  gen_server:reply(From, {ok,self(), Now}),
+  State2 = purge_old_messages(State),
+  NewMessages = ai_pq:add(Now, Message, State2#state.messages),
+  {noreply, State2#state{messages = NewMessages, subscribers = [], last_pull = LastPull}, State#state.max_age * 1000};
 
 handle_cast({From, now}, State) ->
-    gen_server:reply(From, {ok,self(),now_to_micro_seconds(os:timestamp())}),
+    gen_server:reply(From, {ok,self(),erlang:system_time(millisecond)}),
     {noreply, purge_old_messages(State), State#state.max_age * 1000}.
 
 terminate(_Reason, _State) ->
@@ -85,31 +89,25 @@ handle_info(_Info, State) ->
     {noreply, State}.
 
 
-seconds_to_micro_seconds(Seconds) ->
-    Seconds * 1000 * 1000.
-
-now_to_micro_seconds({MegaSecs, Secs, MicroSecs}) ->
-    MegaSecs * 1000 * 1000 * 1000 * 1000 + Secs * 1000 * 1000 + MicroSecs.
-
 messages_newer_than_timestamp(Timestamp, Messages) ->
     collect(fun(V, Acc) -> [V|Acc] end, [], Messages, Timestamp).
 
 purge_old_messages(State) ->
-    Now = now_to_micro_seconds(os:timestamp()),
+    Now = erlang:system_time(millisecond),
     LastPurge = State#state.last_purge,
-    Duration = seconds_to_micro_seconds(1),
+    Duration = timer:seconds(1),
     if
         Now - LastPurge > Duration ->
             State#state{
                 messages = prune(State#state.messages,
-                    Now - seconds_to_micro_seconds(State#state.max_age)),
+                    Now - timer:seconds(State#state.max_age)),
                 last_purge = Now };
         true ->
             State
     end.
 
 pull_messages(Timestamp, Subscriber, State) ->
-    Now = now_to_micro_seconds(os:timestamp()),
+    Now = erlang:system_time(millisecond),
     case messages_newer_than_timestamp(Timestamp, State#state.messages) of
         ReturnMessages when erlang:length(ReturnMessages) > 0 ->
             Subscriber ! {self(), Now, ReturnMessages},

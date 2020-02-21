@@ -6,7 +6,7 @@
 %%% @end
 %%% Created : 15 Oct 2018 by David Gao <david@laptop-02.local>
 %%%-------------------------------------------------------------------
--module(ai_mq_manager_sup).
+-module(ai_mq_queue_sup).
 
 -behaviour(supervisor).
 
@@ -23,19 +23,19 @@
 %%% API functions
 %%%===================================================================
 new(Opts)->
-    supervisor:start_child(?SERVER,[Opts]).
+  supervisor:start_child(?SERVER,[Opts]).
 %%--------------------------------------------------------------------
 %% @doc
 %% Starts the supervisor
 %% @end
 %%--------------------------------------------------------------------
 -spec start_link() -> {ok, Pid :: pid()} |
-                      {error, {already_started, Pid :: pid()}} |
-                      {error, {shutdown, term()}} |
-                      {error, term()} |
-                      ignore.
+        {error, {already_started, Pid :: pid()}} |
+        {error, {shutdown, term()}} |
+        {error, term()} |
+        ignore.
 start_link() ->
-    supervisor:start_link({local, ?SERVER}, ?MODULE, []).
+  supervisor:start_link({local, ?SERVER}, ?MODULE, []).
 
 %%%===================================================================
 %%% Supervisor callbacks
@@ -51,21 +51,21 @@ start_link() ->
 %% @end
 %%--------------------------------------------------------------------
 -spec init(Args :: term()) ->
-                  {ok, {SupFlags :: supervisor:sup_flags(),
-                        [ChildSpec :: supervisor:child_spec()]}} |
-                  ignore.
+        {ok, {SupFlags :: supervisor:sup_flags(),
+              [ChildSpec :: supervisor:child_spec()]}} |
+        ignore.
 init([]) ->
     SupFlags = #{strategy => simple_one_for_one,
                  intensity => 1,
                  period => 5},
 
-    MQManager = #{id => ai_mq_manager,
-               start => {ai_mq_manager, start_link, []},
+    MQQueue = #{id => ai_mq_queue,
+               start => {ai_mq_queue, start_link, []},
                restart => permanent,
                shutdown => 5000,
                type => worker,
-               modules => [ai_mq_manager]},
-    {ok, {SupFlags, [MQManager]}}.
+               modules => [ai_mq_queue]},
+    {ok, {SupFlags, [MQQueue]}}.
 
 %%%===================================================================
 %%% Internal functions
