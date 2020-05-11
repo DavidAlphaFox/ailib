@@ -21,14 +21,13 @@
 
 -define(SERVER, ?MODULE).
 
--record(state, {
-    name,
-    supervisor,
-    size,
-    delay,
-    delay_timers,
-    workers
-}).
+-record(state, {name,
+                supervisor,
+                size,
+                delay,
+                delay_timers,
+                workers
+               }).
 
 %%%===================================================================
 %%% API
@@ -69,7 +68,8 @@ init({Name,PoolArgs, WorkerArgs})->
     process_flag(trap_exit, true),
     init(PoolArgs,WorkerArgs,#state{
                                 name = Name, delay = 0,
-                                delay_timers = undefined
+                                delay_timers = undefined,
+                                workers = maps:new()
                                }).
 init([{worker_module, Mod} | Rest], WorkerArgs, #state{name = Name} = State) when is_atom(Mod) ->
     %% 该进程挂了，会将所有进程全部挂掉
@@ -81,9 +81,8 @@ init([{delay,Delay} | Rest], WorkerArgs, State) when is_integer(Delay) ->
     init(Rest, WorkerArgs, State#state{delay = Delay, delay_timers = []});
 init([_ | Rest], WorkerArgs, State) ->
     init(Rest, WorkerArgs, State);
-init([], _WorkerArgs, #state{size = Size, supervisor = Sup} = State) ->
-    Workers = prepopulate(Size, Sup),
-    {ok, State#state{workers = Workers}}.
+init([], _WorkerArgs, State) ->
+  {ok,prepopulate(State)}.
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
@@ -129,28 +128,41 @@ handle_cast(_Request, State) ->
 	{noreply, NewState :: term(), hibernate} |
     {stop, Reason :: normal | term(), NewState :: term()}.
 
-handle_info({'EXIT', Pid, _Reason}, #state{supervisor = Sup, delay = 0, workers  = Workers} =  State) ->
-    case lists:member(Pid, State#state.workers) of
-        true ->
-            W = lists:filter(fun (P) -> P =/= Pid end, Workers),
-            {noreply, State#state{workers = [new_worker(Sup) | W]}};
-        false ->
-            {noreply, State}
+handle_info({'DOWN', MRef, process, _Pid, _Reason},
+            #state{supervisor = Sup,
+                   delay = 0,
+                   workers  = Workers} =  State) ->
+  case maps:is_key(MRef, Workers) of
+    true ->
+      Workers0 = maps:remove(MRef, Workers),
+      {NMRef,NPid} = new_worker(Sup),
+      {noreply, State#state{workers = maps:put(NMRef,NPid,Workers0)}};
+    false ->
+      {noreply, State}
     end;
-handle_info({'EXIT', Pid, _Reason}, #state{delay = Delay, delay_timers = Timers,
-                                           workers = Workers} =  State)->
-    case lists:member(Pid, State#state.workers) of
-        true ->
-            W = lists:filter(fun (P) -> P =/= Pid end, Workers),
-            Timer = ai_timer:start(Delay,new_worker,ai_timer:new([async])),
-            {noreply, State#state{workers = W, delay_timers = [Timer | Timers]}};
-        false ->
-            {noreply, State}
-    end;
-handle_info({timeout,TimerRef,new_worker},#state{supervisor = Sup, delay_timers = Timers,
-                                                workers = Workers} = State)->
-    Timers1 = lists:filter(fun(T)-> ai_timer:is_current(TimerRef,T) =/= true end,Timers),
-    {noreply, State#state{workers = [new_worker(Sup)| Workers], delay_timers = Timers1}};
+handle_info({'DOWN', MRef, process, _Pid, _Reason},
+           #state{delay = Delay,
+                  delay_timers = Timers,
+                   workers = Workers} =  State)->
+  case maps:is_key(MRef, Workers) of
+    true ->
+      Workers0 = maps:remove(MRef, Workers),
+      Timer = ai_timer:start(Delay,new_worker,ai_timer:new([async])),
+      {noreply, State#state{workers = Workers0,
+                            delay_timers = [Timer | Timers]}};
+    false ->
+      {noreply, State}
+  end;
+handle_info({timeout,TimerRef,new_worker},
+            #state{supervisor = Sup,
+                   delay_timers = Timers,
+                   workers = Workers} = State)->
+  Timers1 = lists:filter(
+              fun(T)-> ai_timer:is_current(TimerRef,T) =/= true end,
+              Timers),
+  {NMRef,NPid} = new_worker(Sup),
+  {noreply, State#state{workers = maps:put(NMRef,NPid,Workers),
+                        delay_timers = Timers1}};
 handle_info(_Info, State) ->
 	{noreply, State}.
 
@@ -165,8 +177,13 @@ handle_info(_Info, State) ->
 %%--------------------------------------------------------------------
 -spec terminate(Reason :: normal | shutdown | {shutdown, term()} | term(),
 	State :: term()) -> any().
-terminate(_Reason, _State) ->
-	ok.
+terminate(_Reason, #state{workers = Workers}) ->
+  maps:map(
+    fun(MRef,Pid) ->
+        erlang:demonitor(MRef,[flush]),
+        erlang:exit(Pid,shutdown)
+    end, Workers),
+  ok.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -199,15 +216,15 @@ format_status(_Opt, Status) ->
 %%%===================================================================
 
 new_worker(Sup) ->
-    {ok, Pid} = supervisor:start_child(Sup, []),
-    true = link(Pid),
-    Pid.
-prepopulate(N, _Sup) when N < 1 ->
-    [];
-prepopulate(N, Sup) ->
-    prepopulate(N, Sup, []).
+  {ok, Pid} = supervisor:start_child(Sup, []),
+  MRef = erlang:monitor(process, Pid),
+  {Pid,MRef}.
 
-prepopulate(0, _Sup, Workers) ->
-    Workers;
-prepopulate(N, Sup, Workers) ->
-    prepopulate(N-1, Sup, [new_worker(Sup) | Workers]).
+prepopulate(#state{size = Size,supervisor = Sup} = State)->
+  prepopulate(Size,Sup, State).
+
+prepopulate(0, _Sup, State) -> State;
+prepopulate(N, Sup, #state{workers = Workers} = State) ->
+  {Pid,MRef} = new_worker(Sup),
+  prepopulate(N-1, Sup,
+              State#state{workers = maps:put(MRef, Pid, Workers)}).
