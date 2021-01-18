@@ -1,6 +1,9 @@
 -module(ai_pt_helper).
 -export([add_function/4,
          add_record/3,
+         module_name/1,
+         directives/1,
+         directives/2,
          transform/3]).
 
 -record(ai_pt_ctx, {ast,
@@ -14,7 +17,7 @@
                     directives = [],
                     functions = [],
                     function_pos = -1,
-
+                    index,
                     added_functions = [],
                     added_exports = [],
                     added_records = []}).
@@ -34,6 +37,19 @@
 
 -type ai_pt_ctx() :: #ai_pt_ctx{}.
 -type ast() :: tuple() | [ast()].
+
+-spec module_name(ai_pt_ctx()) -> atom().
+module_name(#ai_pt_ctx{module_name = ModuleName}) ->ModuleName.
+
+-spec directives(ai_pt_ctx(), atom()) -> list().
+directives(#ai_pt_ctx{directives = Directives}, Name) ->
+  lists:filter(
+    fun({DirectiveName, _}) ->
+        DirectiveName =:= Name
+    end, Directives).
+
+-spec directives(ai_pt_ctx()) -> list().
+directives(#ai_pt_ctx{directives = Directives}) -> Directives.
 
 -spec add_function(ai_pt_ctx(), export | not_export, atom(), tuple() | list()) -> ai_pt_ctx().
 add_function(Ctx = #ai_pt_ctx{added_functions = AddedFunctions},
@@ -122,16 +138,40 @@ transform(Fun, AST, Options) ->
 -spec parse(string(), list()) -> ai_pt_ctx().
 parse(AST, Options) ->
   [{attribute, _, file, {FileName, _}}|NextAST] = AST,
-  Ctx = #ai_pt_ctx{ main_file = FileName,
-                       ast = AST,
-                       options = Options},
-  lists:foldl(fun parse_definition/2,Ctx,NextAST).
+  Ctx = #ai_pt_ctx{main_file = FileName,
+                   ast = AST,
+                   options = Options},
+  {_,Ctx1} = lists:foldl(fun parse_definition/2,{1,Ctx},NextAST),
+  Ctx1.
+parse_definition({attribute,_,module,ModuleName}, {Index,Ctx})->
+  {Index + 1,Ctx#ai_pt_ctx{module_name = ModuleName}};
+parse_definition({attribute, _, compile, Options}, {Index, Ctx}) ->
+  {Index + 1, Ctx#ai_pt_ctx{compile_options = Options}};
+parse_definition({attribute, _, export, Exports},
+                 {Index,Ctx = #ai_pt_ctx{exports = Exps}}) ->
+  {Index + 1 ,Ctx#ai_pt_ctx{exports = Exps ++ Exports, exports_pos = Index}};
+
+parse_definition({function, _, FunctionName, FunctionArity, FunctionClauses} = FunAST,
+                 {Index,Ctx = #ai_pt_ctx{functions = Functions, function_pos = FFP}}) ->
+  NewFFP = if
+    FFP =:= -1 -> Index;
+    true -> FFP
+  end,
+  FunDef = #ai_pt_fun{index = Index,
+                      name = FunctionName,
+                      arity = FunctionArity,
+                      clauses = FunctionClauses,
+                      ast = FunAST},
+  {Index + 1,Ctx#ai_pt_ctx{functions = Functions ++ [FunDef],
+                           function_pos = NewFFP}};
+
 
 parse_definition({attribute, _, Directive, Data},
-                 Ctx = #ai_pt_ctx{directives = Directives}) ->
-  Ctx#ai_pt_ctx{directives = Directives ++ [{Directive, Data}]};
-parse_definition({eof, N}, Ctx) -> Ctx#ai_pt_ctx{last_line = N};
-parse_definition(_Def,Ctx) -> Ctx.
+                 {Index,Ctx = #ai_pt_ctx{directives = Directives}}) ->
+  {Index+1,Ctx#ai_pt_ctx{directives = Directives ++ [{Directive, Data}]}};
+
+parse_definition({eof, N}, {Index,Ctx}) -> {Index+1,Ctx#ai_pt_ctx{last_line = N}};
+parse_definition(_Def,{Index,Ctx}) -> {Index +1,Ctx}.
 
 -spec generate(ai_pt_ctx()) -> ast().
 generate(#ai_pt_ctx{ast = AST,
@@ -176,7 +216,7 @@ generate_exports_(AddedFunctions) ->
     lists:foldl(
       fun(#ai_pt_fun{name = Name, arity = Arity,visibility = Visibility},
           Ast) ->
-          if Visibility == true -> Ast ++ [{Name, Arity}];
+          if Visibility == export -> Ast ++ [{Name, Arity}];
              true -> Ast
           end
       end, [], AddedFunctions),
