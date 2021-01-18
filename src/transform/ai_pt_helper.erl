@@ -43,10 +43,12 @@ module_name(#ai_pt_ctx{module_name = ModuleName}) ->ModuleName.
 
 -spec directives(ai_pt_ctx(), atom()) -> list().
 directives(#ai_pt_ctx{directives = Directives}, Name) ->
-  lists:filter(
-    fun({DirectiveName, _}) ->
-        DirectiveName =:= Name
-    end, Directives).
+  lists:map(
+    fun({_, Data}) -> Data end,
+    lists:filter(
+      fun({DirectiveName, _}) ->
+          DirectiveName =:= Name
+      end, Directives)).
 
 -spec directives(ai_pt_ctx()) -> list().
 directives(#ai_pt_ctx{directives = Directives}) -> Directives.
