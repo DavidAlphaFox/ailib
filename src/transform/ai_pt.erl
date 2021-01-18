@@ -8,6 +8,7 @@
          build_boolean/1,
          build_binary/1,
          build_var/1,
+         build_value/1,
          build_attribute/2,
          build_record/1,
          build_record/2,
