@@ -8,10 +8,12 @@
          build_boolean/1,
          build_binary/1,
          build_var/1,
+         build_attribute/2,
          build_record/1,
          build_record/2,
          build_record/3,
          build_record_field/2,
+         build_record_field/1,
          build_get_record_field/3,
 
          build_op/3,
@@ -26,6 +28,7 @@
          build_call/3,
          build_clause/2,
          build_clause/3,
+         build_function/3,
 
          build_guard/1,
          build_and_guard/2,
@@ -132,8 +135,10 @@ build_value(X) when is_tuple(X) ->
     false -> build_tuple(X)
   end.
 -spec build_var(atom()) -> ast().
-build_var(A) when is_atom(A) ->
-  {var, 1, A}.
+build_var(A) when is_atom(A) -> {var, 1, A}.
+
+-spec build_attribute(atom(),ast())-> ast().
+build_attribute(Attribute,AST)->{attribute,1,Attribute,AST}.
 
 build_record(Name) when is_atom(Name) ->
   build_record(Name, []).
@@ -144,6 +149,9 @@ build_record(Record, Name) when is_atom(Name) ->
 build_record(Record, Name, Fields) when is_atom(Name), is_list(Fields) ->
   {record, 1,build_var(Record),Name,Fields}.
 
+-spec build_record_field(atom()) -> ast().
+build_record_field(Field)->
+  {record_field,1,build_atom(Field)}.
 -spec build_record_field(atom(), ast()) -> ast().
 build_record_field(Field, Value) when is_atom(Field) ->
   {record_field, 1, build_atom(Field), Value}.
@@ -251,6 +259,9 @@ build_clause(Vars, Guards, Body) ->
       L -> L
     end,
   {clause, 1, Vars1, Guards1, Body1}.
+
+-spec build_function(atom(),integer(),ast())-> ast().
+build_function(Name,Arity,Clauses)-> {function,1,Name,Arity,Clauses}.
 
 -spec build_guard(ast()) -> ast().
 build_guard(Ast) when is_tuple(Ast) -> build_guard([[Ast]]);
