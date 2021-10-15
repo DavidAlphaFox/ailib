@@ -1,20 +1,32 @@
--module(ai_base64).
--export([decode/1,decode/2,encode/1,encode/2]).
+-module(ailib_base64).
+-export([decode/1,
+         decode/2,
+         encode/1,
+         encode/2]).
 
+-export_type([base64_codec_opts/0]).
+
+-type base64_codec_opts() :: #{padding => true | false,
+                               url => true | false}.
+
+-spec decode(binary()) -> binary().
 decode(Enc) -> decode(Enc, #{}).
+-spec decode(binary(),base64_codec_opts()) -> binary().
 decode(Enc0, #{url := true} = Opts) ->
 	Enc1 = << << case C of
-                     $- -> $+;
-                     $_ -> $/;
-                     _ -> C
-                 end >> || << C >> <= Enc0 >>,
+                 $- -> $+;
+                 $_ -> $/;
+                 _ -> C
+               end >> || << C >> <= Enc0 >>,
 	Enc = add_padding(Enc1,Opts),
 	base64:decode(Enc);
 decode(Enc0,Opts) ->
     Enc = add_padding(Enc0,Opts),
     base64:decode(Enc).
 
+-spec encode(binary()) -> binary().
 encode(Dec) -> encode(Dec, #{}).
+-spec encode(binary(),base64_codec_opts()) -> binary().
 encode(Dec, Opts) -> encode(base64:encode(Dec), Opts, <<>>).
 
 encode(<<$+, R/bits>>, #{url := true } = Opts, Acc) -> encode(R, Opts, <<Acc/binary, $->>);
