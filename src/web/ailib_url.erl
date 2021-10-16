@@ -11,8 +11,8 @@
              host = undefined ::binary(),
              port = undefined ::binary(),
              path = undefined ::binary(),
-             qs = undefined ::binary(),
-             fragment = undefined ::binary()}).
+             qs = undefined ::  list(),
+             fragment = undefined :: list()}).
 
 -type url() :: #url{}.
 -record(ailib_url_state,{array_fun = undefined :: fun(),
@@ -22,6 +22,7 @@
 
 -export_type([state/0]).
 
+-define(BRACKET,<<"[]">>).
 
 %% This is from chapter 3, Syntax Components, of RFC 3986:
 %%
@@ -65,190 +66,243 @@ new()-> #ailib_url_state{}.
 -spec new(fun()) -> state().
 new(ArrayFun)-> #ailib_url_state{array_fun = ArrayFun}.
 
+-spec parse(binary()|list()) -> state().
+parse(U)-> parse(U,#ailib_url_state{}).
+
 -spec parse(binary()|list(),state()) -> state().
 parse(U,S)->
-  UBinary = ai_string:to_string(U),
-  parse(schema,UBinary,S).
+  UBinary = ailib_string:to_binary(U),
+  URL = parse(schema,UBinary,S#ailib_url_state.url),
+  S#ailib_url_state{url = URL}.
 
--sepc parse(binary()|list()) -> state().
-parse(U)->
-  UBinary = ai_string:to_string(U),
-  parse(schema,UBinary,#ailib_url_state{}).
+-spec parse(atom(),binary(),state()) -> state().
 parse(schema,Bin,Acc)->
-    case binary:match(Bin, [<<":">>]) of
-        nomatch ->
-            parse(authority,Bin,Acc);
-        {S,L}->
-            %% maybe this example.com:3333/over/there?name=ferret#nose
-            MaybeSchema = binary:part(Bin, 0, S),
-            Pos = S + L, %%binary的切开点，Pos是未匹配字串的第一个字符
-            DoubleSlash = binary:at(Bin,Pos) =:= $/ andalso binary:at(Bin,Pos + 1) =:= $/,
-            if
-                DoubleSlash == true ->
-                    Rest  = binary:part(Bin, Pos, byte_size(Bin) - Pos),
-                    parse(authority,Rest,Acc#ailib_url_state{schema = MaybeSchema});
-                true ->
-                    parse(authority,Bin,Acc)
-            end
+  case binary:match(Bin, [<<":">>]) of
+    nomatch -> parse(authority,Bin,Acc);
+    {S,L}->
+      %% maybe this example.com:3333/over/there?name=ferret#nose
+      MaybeSchema = binary:part(Bin, 0, S),
+      Pos = S + L, %%binary的切开点，Pos是未匹配字串的第一个字符
+      DoubleSlash = binary:at(Bin,Pos) =:= $/ 
+        andalso binary:at(Bin,Pos + 1) =:= $/,
+      if
+        DoubleSlash == true ->
+          Rest  = binary:part(Bin, Pos, byte_size(Bin) - Pos),
+          parse(authority,Rest,Acc#url{schema = MaybeSchema});
+        true -> parse(authority,Bin,Acc)
+      end
     end;
 parse(authority,<<"//",Bin/bits>>,Acc)->
-    case binary:match(Bin, [<<":">>]) of
+  case binary:match(Bin, [<<":">>]) of
+    nomatch ->
+      %% example.com/a
+      %% example.com/
+      %% example.com
+      case binary:match(Bin,[<<"/">>]) of
+        nomatch -> Acc#url{authority = Bin,host = Bin,path = <<"/">>}; %example.com
+        {S1,_L1}->
+          Authority = binary:part(Bin,0,S1),
+          Rest = binary:part(Bin,S1,byte_size(Bin) - S1),
+          parse(path,Rest,Acc#url{authority = Authority,host = Authority})
+      end;
+    {S,L}->
+      case binary:match(Bin,[<<"/">>]) of
         nomatch ->
-            %% example.com/a
-            %% example.com/
-            %% example.com
-            case binary:match(Bin,[<<"/">>]) of
-                nomatch -> Acc#ailib_url_state{authority = Bin,host = Bin,path = <<"/">>}; %example.com
-                {S1,_L1}->
-                    Authority = binary:part(Bin,0,S1),
-                    Rest = binary:part(Bin,S1,byte_size(Bin) - S1),
-                    parse(path,Rest,Acc#ailib_url_state{authority = Authority,host = Authority})
-            end;
-        {S,L}->
-            case binary:match(Bin,[<<"/">>]) of
-                nomatch ->
-                    Pos = S + L,
-                    Port = binary:part(Bin,Pos,byte_size(Bin) - Pos),
-                    Host = binary:part(Bin,0,S),
-                    Acc#ailib_url_state{authority = Bin,host = Host,port = Port,path = <<"/">>}; %example.com
-                {S2,_L2}->
-                    Pos = S + L,
-                    Port = binary:part(Bin,Pos,S2 - Pos),
-                    Host = binary:part(Bin,0,S),
-                    Rest = binary:part(Bin,S2,byte_size(Bin) - S2),
-                    parse(path,Rest,Acc#ailib_url_state{authority = <<Host/binary,":",Port/binary>>,host = Host,port = Port})
-
-            end
+          Pos = S + L,
+          Port = binary:part(Bin,Pos,byte_size(Bin) - Pos),
+          Host = binary:part(Bin,0,S),
+          Acc#url{authority = Bin,host = Host,port = Port,path = <<"/">>}; %example.com
+        {S2,_L2}->
+          Pos = S + L,
+          Port = binary:part(Bin,Pos,S2 - Pos),
+          Host = binary:part(Bin,0,S),
+          Rest = binary:part(Bin,S2,byte_size(Bin) - S2),
+          parse(path,Rest,Acc#url{authority = <<Host/binary,":",Port/binary>>,host = Host,port = Port})
+      end
     end;
 %% no schema here, but can have authority
 parse(authority,Bin,Acc)->
    case binary:match(Bin,[<<".">>]) of
-        nomatch -> parse(path,Bin,Acc);
-        _ -> parse(authority,<<"//",Bin/binary>>,Acc)
-    end;
+     nomatch -> parse(path,Bin,Acc);
+     _ -> parse(authority,<<"//",Bin/binary>>,Acc)
+   end;
 
 parse(path,Bin,Acc)->
-    case binary:match(Bin,[<<"?">>]) of
-        nomatch ->
-            %% example.com/a/b/c
-            %% example.com/a/b/c#c=x&d=n
-            case binary:match(Bin,[<<"#">>]) of
-                nomatch -> %% example.com/a/b/c
-                    Acc#ailib_url_state{path = Bin};
-                {S,L}->
-                    Path = binary:part(Bin,0,S),
-                    Pos = S + L,
-                    Rest  = binary:part(Bin, Pos, byte_size(Bin) - Pos),
-                    parse(fragment,Rest,Acc#ailib_url_state{path = Path})
-            end;
-        {S1,L1}->
-            %% example.com/a/b/c?1=&2=
-            %% example.com/a/b/c?1=&2=#c=x&d=n
-            Path = binary:part(Bin,0,S1),
-            Pos = S1 + L1,
-            Rest = binary:part(Bin,Pos,byte_size(Bin) - Pos),
-            parse(qs,Rest,Acc#ailib_url_state{path = Path})
-    end;
+  case binary:match(Bin,[<<"?">>]) of
+    nomatch ->
+      %% example.com/a/b/c
+      %% example.com/a/b/c#c=x&d=n
+      case binary:match(Bin,[<<"#">>]) of
+        nomatch -> %% example.com/a/b/c
+          Acc#url{path = Bin};
+        {S,L}->
+          Path = binary:part(Bin,0,S),
+          Pos = S + L,
+          Rest  = binary:part(Bin, Pos, byte_size(Bin) - Pos),
+          parse(fragment,Rest,Acc#url{path = Path})
+      end;
+    {S1,L1}->
+      %% example.com/a/b/c?1=&2=
+      %% example.com/a/b/c?1=&2=#c=x&d=n
+      Path = binary:part(Bin,0,S1),
+      Pos = S1 + L1,
+      Rest = binary:part(Bin,Pos,byte_size(Bin) - Pos),
+      parse(qs,Rest,Acc#url{path = Path})
+  end;
 parse(qs,Bin,Acc)->
-    case binary:match(Bin,[<<"#">>]) of
-        nomatch ->
-            QS = parse_query(Bin),
-            QS0 = lists:map(fun({K,V})->
-                                    {urldecode(K),urldecode(V)}
-                            end,QS),
-            Acc#ailib_url_state{qs = QS0};
-        {S,L} ->
-            Query = binary:part(Bin,0,S),
-            QS = parse_query(Query),
-            QS0 = lists:map(fun({K,V})->
-                                    {urldecode(K),urldecode(V)}
-                            end,QS),
-            Pos = S + L,
-            Rest = binary:part(Bin,Pos,byte_size(Bin) - Pos),
-            parse(fragment,Rest,Acc#ailib_url_state{qs = QS0})
-end;
+  case binary:match(Bin,[<<"#">>]) of
+    nomatch ->
+      QS = parse_query(Bin),
+      Acc#url{qs = QS};
+    {S,L} ->
+      Query = binary:part(Bin,0,S),
+      QS = parse_query(Query),
+      Pos = S + L,
+      Rest = binary:part(Bin,Pos,byte_size(Bin) - Pos),
+      parse(fragment,Rest,Acc#url{qs = QS})
+  end;
 parse(fragment,Bin,Acc)->
-    QS = parse_query(Bin),
-    QS0 = lists:map(fun({K,V})->
-            {urldecode(K),urldecode(V)}
-        end,QS),
-    Acc#ailib_url_state{fragment = QS0}.
+  QS = parse_query(Bin),
+  Acc#url{fragment = QS}.
 
 
-build(Record)->
-    build(schema,Record,<<>>).
-build(schema,Record,Acc)->
-    case Record#ailib_url_state.schema of
+build(Record)-> build(schema,Record,<<>>).
+build(schema,#ailib_url_state{url = URL} = Record,Acc)->
+  case URL#url.schema of
+    undefined -> build(authority,Record,Acc);
+    Schema ->
+      SchemaBin = ailib_string:to_binary(Schema),
+      build(authority,Record,<<Acc/binary,SchemaBin/binary,"://">>)
+  end;
+build(authority,#ailib_url_state{url = URL} = Record,Acc)->
+  case { URL#url.authority,URL#url.host} of
+    {undefined,undefined} ->  build(path,Record,Acc);
+    {undefined,Host}->
+      case URL#url.port of
         undefined ->
-            build(authority,Record,Acc);
-        Schema ->
-            SchemaBin = ai_string:to_string(Schema),
-            build(authority,Record,<<Acc/binary,SchemaBin/binary,"://">>)
-    end;
-build(authority,Record,Acc)->
-    case {Record#ailib_url_state.authority,Record#ailib_url_state.host} of
-        {undefined,undefined} ->  build(path,Record,Acc);
-        {undefined,Host}->
-            case Record#ailib_url_state.port of
-                undefined ->
-                    HostBin = ai_string:to_string(Host),
-                    build(path,Record,<<Acc/binary,HostBin/binary>>);
-                Port ->
-                    HostBin = ai_string:to_string(Host),
-                    PortBin = ai_string:to_string(Port),
-                    build(path,Record,<<Acc/binary,HostBin/binary,":",PortBin/binary>>)
-            end;
-        {Authority,_Host}->
-            AuthorityBin = ai_string:to_string(Authority),
-            build(path,Record,<<Acc/binary,AuthorityBin/binary>>)
-    end;
-build(path,Record,Acc)->
-    case Record#ailib_url_state.path of
-        undefined -> build(qs,Record,<<Acc/binary,"/">>);
-        Path ->
-            PathBin = ai_string:to_string(Path),
-            build(qs,Record,<<Acc/binary,PathBin/binary>>)
-    end;
-build(qs,Record,Acc)->
-    case Record#ailib_url_state.qs of
-        undefined -> build(fragment,Record,Acc);
-        QS ->
-            Q = lists:map(fun({Key,Value})->
-                                  EKey = urlencode(ai_string:to_string(Key)),
-                                  EValue =urlencode(ai_string:to_string(Value)),
-                                  <<EKey/binary,"=",EValue/binary>>
-                          end,QS),
-            S = lists:foldl(
-                    fun
-                        (I,QAcc) when erlang:is_atom(QAcc)-> <<"?",I/binary>> ;
-                        (I,QAcc) ->  <<QAcc/binary,"&",I/binary>>
-                    end, undefined,Q),
-            if
-                S == undefined ->
-                    build(fragment,Record,Acc);
-                true ->
-                    build(fragment,Record,<<Acc/binary,S/binary>>)
-            end
-    end;
-build(fragment,Record,Acc)->
-    case Record#ailib_url_state.fragment of
-        undefined -> Acc;
-        QS ->
-            Q = lists:map(fun({Key,Value})->
-                                  EKey = urlencode(ai_string:to_string(Key)),
-                                  EValue = urlencode(ai_string:to_string(Value)),
-                                  <<EKey/binary,"=",EValue/binary>>
-                          end,QS),
-            S = lists:foldl(
-                    fun
-                        (I,QAcc) when erlang:is_atom(QAcc)-> <<"#",I/binary>> ;
-                        (I,QAcc) ->  <<QAcc/binary,"&",I/binary>>
-                    end, undefined,Q),
-            <<Acc/binary,S/binary>>
-    end.
+          HostBin = ai_string:to_binary(Host),
+          build(path,Record,<<Acc/binary,HostBin/binary>>);
+        Port ->
+          HostBin = ai_string:to_binary(Host),
+          PortBin = ai_string:to_binary(Port),
+          build(path,Record,<<Acc/binary,HostBin/binary,":",PortBin/binary>>)
+      end;
+    {Authority,_Host}->
+      AuthorityBin = ai_string:to_binaryg(Authority),
+      build(path,Record,<<Acc/binary,AuthorityBin/binary>>)
+  end;
+build(path,#ailib_url_state{url = URL} = Record,Acc)->
+  case URL#url.path of
+    undefined -> build(qs,Record,<<Acc/binary,"/">>);
+    Path ->
+      PathBin = ai_string:to_binary(Path),
+      build(qs,Record,<<Acc/binary,PathBin/binary>>)
+  end;
+build(qs,#ailib_url_state{url = URL,array_fun = ArrayFun} = Record,Acc)->
+  case URL#url.qs of
+    undefined -> build(fragment,Record,Acc);
+    QS ->
+      Q = build_query(ArrayFun,QS),
+      build(fragment,Record,<<Acc/binary,$?,Q/binary>>)
+  end;
+build(fragment,#ailib_url_state{url = URL,array_fun = ArrayFun},Acc)->
+  case URL#url.fragment of
+    undefined -> Acc;
+    QS ->
+      Q = build_query(ArrayFun,QS),
+      <<Acc/binary,$?,Q/binary>>
+  end.
 
+-spec build_query(list()) -> binary().
+build_query([])-> <<>>;
+build_query(L)-> build_query(undefined,L, <<>>).
+
+-spec build_query(fun(),list()) -> binary().
+build_query(_,[])-> <<>>;
+build_query(ArrayFun,L)-> build_query(ArrayFun,L, <<>>).
+
+build_query(_,[], Acc) -> Acc;
+build_query(ArrayFun,[{Name, true}|Tail], Acc) ->
+	Acc2 = urlencode(Name, << Acc/bits, $& >>),
+	build_query(ArrayFun,Tail, Acc2);
+build_query(ArrayFun,[{Name, Value}|Tail], Acc) ->
+  QS =
+    if erlang:is_list(Value) -> build_array_param(ArrayFun,Name,Value);
+       true ->
+        Name0 = urlencode(Name),
+        Value0 = urlencode(Value),
+        <<Name0/binary,$=,Value0/binary>>
+    end,
+	build_query(Tail, <<Acc/binary, $&,QS/binary>>).
+
+build_array_param(undefined,Name,Value)->
+  KV = lists:maps(
+        fun(Item)->
+            BName = ailib_string:to_binary(Name),
+            BItem = ailib_string:to_binary(Item),
+            Name0 = urlencode(<<BName/binary,?BRACKET/binary>>),
+            Item0 = urlencode(BItem),
+            <<Name0/binary,$=,Item0/binary>>
+        end,Value),
+  ailib_string:join(KV,<<"&">>);
+build_array_param(ArrayFun,Name,Value)->
+  erlang:apply(ArrayFun,[Name,Value]).
+
+parse_query(B) -> parse_query_name(B, [], <<>>).
+
+parse_query_name(<< $=, Rest/bits >>, Acc, Name) when Name =/= <<>> ->
+  parse_query_value(Rest, Acc, urldecode(Name), <<>>);
+parse_query_name(<< $&, Rest/bits >>, Acc, Name) ->
+	case Name of
+		<<>> -> parse_query_name(Rest, Acc, <<>>);
+		_ -> parse_query_name(Rest, [{urldecode(Name), true}|Acc], <<>>)
+	end;
+parse_query_name(<< C, Rest/bits >>, Acc, Name) when C =/= $%, C =/= $= ->
+    parse_query_name(Rest, Acc, << Name/bits, C >>);
+parse_query_name(<<>>, Acc, Name) ->
+	case Name of
+		<<>> -> lists:reverse(Acc);
+		_ -> lists:reverse([{urldecode(Name), true}|Acc])
+	end.
+
+parse_query_value(<< $&, Rest/bits >>, Acc, Name, Value) ->
+	parse_query_name(Rest,
+                   add_query_param(Name, urldecode(Value),Acc),
+                   <<>>);
+parse_query_value(<< C, Rest/bits >>, Acc, Name, Value) when C =/= $% ->
+	parse_query_value(Rest, Acc, Name, << Value/bits, C >>);
+parse_query_value(<<>>, Acc, Name, Value) ->
+	lists:reverse(add_query_param(Name, urldecode(Value),Acc)).
+
+add_query_param(Name,Value,[{Name0,VS}|Acc0] = Acc)->
+  NameSize = erlang:byteSize(Name) - 2,
+  <<Name1:NameSize/binary,Rest>> = Name,
+  case Rest of
+    ?BRACKET ->
+      if Name1 == Name0 -> [{Name0,VS ++ [Value]}| Acc0];
+         true -> [{Name1, [Value]}| Acc]
+      end;
+    _ ->
+      if Name == Name0 ->
+          if erlang:is_list(VS) -> [{Name,VS ++ [Value]}| Acc0];
+             true -> [{Name,[VS,Value]}| Acc0]
+          end;
+         true -> [{Name,Value}|Acc]
+      end
+  end.
+
+%% @doc Percent encode a string. (RFC3986 2.1)
+-spec urlencode(B) -> B when B::binary().
 urlencode(B) -> urlencode(B, <<>>).
-urlencode(<< $\s, Rest/bits >>, Acc) -> urlencode(Rest, << Acc/bits, $+ >>);
+urlencode(<< $!, Rest/bits >>, Acc) -> urlencode(Rest, << Acc/bits, $! >>);
+urlencode(<< $$, Rest/bits >>, Acc) -> urlencode(Rest, << Acc/bits, $$ >>);
+urlencode(<< $&, Rest/bits >>, Acc) -> urlencode(Rest, << Acc/bits, $& >>);
+urlencode(<< $', Rest/bits >>, Acc) -> urlencode(Rest, << Acc/bits, $' >>);
+urlencode(<< $(, Rest/bits >>, Acc) -> urlencode(Rest, << Acc/bits, $( >>);
+urlencode(<< $), Rest/bits >>, Acc) -> urlencode(Rest, << Acc/bits, $) >>);
+urlencode(<< $*, Rest/bits >>, Acc) -> urlencode(Rest, << Acc/bits, $* >>);
+urlencode(<< $+, Rest/bits >>, Acc) -> urlencode(Rest, << Acc/bits, $+ >>);
+urlencode(<< $,, Rest/bits >>, Acc) -> urlencode(Rest, << Acc/bits, $, >>);
 urlencode(<< $-, Rest/bits >>, Acc) -> urlencode(Rest, << Acc/bits, $- >>);
 urlencode(<< $., Rest/bits >>, Acc) -> urlencode(Rest, << Acc/bits, $. >>);
 urlencode(<< $0, Rest/bits >>, Acc) -> urlencode(Rest, << Acc/bits, $0 >>);
@@ -261,6 +315,10 @@ urlencode(<< $6, Rest/bits >>, Acc) -> urlencode(Rest, << Acc/bits, $6 >>);
 urlencode(<< $7, Rest/bits >>, Acc) -> urlencode(Rest, << Acc/bits, $7 >>);
 urlencode(<< $8, Rest/bits >>, Acc) -> urlencode(Rest, << Acc/bits, $8 >>);
 urlencode(<< $9, Rest/bits >>, Acc) -> urlencode(Rest, << Acc/bits, $9 >>);
+urlencode(<< $:, Rest/bits >>, Acc) -> urlencode(Rest, << Acc/bits, $: >>);
+urlencode(<< $;, Rest/bits >>, Acc) -> urlencode(Rest, << Acc/bits, $; >>);
+urlencode(<< $=, Rest/bits >>, Acc) -> urlencode(Rest, << Acc/bits, $= >>);
+urlencode(<< $@, Rest/bits >>, Acc) -> urlencode(Rest, << Acc/bits, $@ >>);
 urlencode(<< $A, Rest/bits >>, Acc) -> urlencode(Rest, << Acc/bits, $A >>);
 urlencode(<< $B, Rest/bits >>, Acc) -> urlencode(Rest, << Acc/bits, $B >>);
 urlencode(<< $C, Rest/bits >>, Acc) -> urlencode(Rest, << Acc/bits, $C >>);
@@ -314,19 +372,99 @@ urlencode(<< $w, Rest/bits >>, Acc) -> urlencode(Rest, << Acc/bits, $w >>);
 urlencode(<< $x, Rest/bits >>, Acc) -> urlencode(Rest, << Acc/bits, $x >>);
 urlencode(<< $y, Rest/bits >>, Acc) -> urlencode(Rest, << Acc/bits, $y >>);
 urlencode(<< $z, Rest/bits >>, Acc) -> urlencode(Rest, << Acc/bits, $z >>);
+urlencode(<< $~, Rest/bits >>, Acc) -> urlencode(Rest, << Acc/bits, $~ >>);
 urlencode(<< C, Rest/bits >>, Acc) ->
 	H = hex(C bsr 4),
 	L = hex(C band 16#0f),
 	urlencode(Rest, << Acc/bits, $%, H, L >>);
-urlencode(<<>>, Acc) -> Acc.
+urlencode(<<>>, Acc) ->
+	Acc.
 
+%% @doc Decode a percent encoded string. (RFC3986 2.1)
+-spec urldecode(B) -> B when B::binary().
 urldecode(B) -> urldecode(B, <<>>).
-
 urldecode(<< $%, H, L, Rest/bits >>, Acc) ->
-    C = (unhex(H) bsl 4 bor unhex(L)),
+	C = (unhex(H) bsl 4 bor unhex(L)),
 	urldecode(Rest, << Acc/bits, C >>);
-urldecode(<< $+, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, " " >>);
-urldecode(<< C, Rest/bits >>, Acc) when C =/= $% -> urldecode(Rest, << Acc/bits, C >>);
+urldecode(<< $!, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $! >>);
+urldecode(<< $$, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $$ >>);
+urldecode(<< $&, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $& >>);
+urldecode(<< $', Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $' >>);
+urldecode(<< $(, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $( >>);
+urldecode(<< $), Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $) >>);
+urldecode(<< $*, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $* >>);
+urldecode(<< $+, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $+ >>);
+urldecode(<< $,, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $, >>);
+urldecode(<< $-, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $- >>);
+urldecode(<< $., Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $. >>);
+urldecode(<< $0, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $0 >>);
+urldecode(<< $1, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $1 >>);
+urldecode(<< $2, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $2 >>);
+urldecode(<< $3, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $3 >>);
+urldecode(<< $4, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $4 >>);
+urldecode(<< $5, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $5 >>);
+urldecode(<< $6, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $6 >>);
+urldecode(<< $7, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $7 >>);
+urldecode(<< $8, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $8 >>);
+urldecode(<< $9, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $9 >>);
+urldecode(<< $:, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $: >>);
+urldecode(<< $;, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $; >>);
+urldecode(<< $=, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $= >>);
+urldecode(<< $@, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $@ >>);
+urldecode(<< $A, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $A >>);
+urldecode(<< $B, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $B >>);
+urldecode(<< $C, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $C >>);
+urldecode(<< $D, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $D >>);
+urldecode(<< $E, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $E >>);
+urldecode(<< $F, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $F >>);
+urldecode(<< $G, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $G >>);
+urldecode(<< $H, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $H >>);
+urldecode(<< $I, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $I >>);
+urldecode(<< $J, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $J >>);
+urldecode(<< $K, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $K >>);
+urldecode(<< $L, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $L >>);
+urldecode(<< $M, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $M >>);
+urldecode(<< $N, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $N >>);
+urldecode(<< $O, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $O >>);
+urldecode(<< $P, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $P >>);
+urldecode(<< $Q, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $Q >>);
+urldecode(<< $R, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $R >>);
+urldecode(<< $S, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $S >>);
+urldecode(<< $T, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $T >>);
+urldecode(<< $U, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $U >>);
+urldecode(<< $V, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $V >>);
+urldecode(<< $W, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $W >>);
+urldecode(<< $X, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $X >>);
+urldecode(<< $Y, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $Y >>);
+urldecode(<< $Z, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $Z >>);
+urldecode(<< $_, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $_ >>);
+urldecode(<< $a, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $a >>);
+urldecode(<< $b, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $b >>);
+urldecode(<< $c, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $c >>);
+urldecode(<< $d, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $d >>);
+urldecode(<< $e, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $e >>);
+urldecode(<< $f, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $f >>);
+urldecode(<< $g, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $g >>);
+urldecode(<< $h, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $h >>);
+urldecode(<< $i, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $i >>);
+urldecode(<< $j, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $j >>);
+urldecode(<< $k, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $k >>);
+urldecode(<< $l, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $l >>);
+urldecode(<< $m, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $m >>);
+urldecode(<< $n, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $n >>);
+urldecode(<< $o, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $o >>);
+urldecode(<< $p, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $p >>);
+urldecode(<< $q, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $q >>);
+urldecode(<< $r, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $r >>);
+urldecode(<< $s, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $s >>);
+urldecode(<< $t, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $t >>);
+urldecode(<< $u, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $u >>);
+urldecode(<< $v, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $v >>);
+urldecode(<< $w, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $w >>);
+urldecode(<< $x, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $x >>);
+urldecode(<< $y, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $y >>);
+urldecode(<< $z, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $z >>);
+urldecode(<< $~, Rest/bits >>, Acc) -> urldecode(Rest, << Acc/bits, $~ >>);
 urldecode(<<>>, Acc) -> Acc.
 
 hex( 0) -> $0;
@@ -368,54 +506,3 @@ unhex($c) -> 12;
 unhex($d) -> 13;
 unhex($e) -> 14;
 unhex($f) -> 15.
-
-build_query([])-> <<>>;
-build_query(L)-> build_query(L, <<>>).
-
-build_query([], Acc) ->
-	<< $&, Query/bits >> = Acc,
-	Query;
-build_query([{Name, true}|Tail], Acc) ->
-	Acc2 = urlencode(Name, << Acc/bits, $& >>),
-	build_query(Tail, Acc2);
-build_query([{Name, Value}|Tail], Acc) ->
-	Acc2 = urlencode(Name, << Acc/bits, $& >>),
-	Acc3 = urlencode(Value, << Acc2/bits, $= >>),
-	build_query(Tail, Acc3).
-
-parse_query(B) -> parse_query_name(B, [], <<>>).
-
-parse_query_name(<< $%, H, L, Rest/bits >>, Acc, Name) ->
-	C = (unhex(H) bsl 4 bor unhex(L)),
-	parse_query_name(Rest, Acc, << Name/bits, C >>);
-parse_query_name(<< $+, Rest/bits >>, Acc, Name) ->
-    parse_query_name(Rest, Acc, << Name/bits, " " >>);
-parse_query_name(<< $=, Rest/bits >>, Acc, Name) when Name =/= <<>> ->
-    parse_query_value(Rest, Acc, Name, <<>>);
-parse_query_name(<< $&, Rest/bits >>, Acc, Name) ->
-	case Name of
-		<<>> -> parse_query_name(Rest, Acc, <<>>);
-		_ -> parse_query_name(Rest, [{Name, true}|Acc], <<>>)
-	end;
-parse_query_name(<< C, Rest/bits >>, Acc, Name) when C =/= $%, C =/= $= ->
-    parse_query_name(Rest, Acc, << Name/bits, C >>);
-parse_query_name(<<>>, Acc, Name) ->
-	case Name of
-		<<>> -> lists:reverse(Acc);
-		_ -> lists:reverse([{Name, true}|Acc])
-	end.
-
-parse_query_value(<< $%, H, L, Rest/bits >>, Acc, Name, Value) ->
-	C = (unhex(H) bsl 4 bor unhex(L)),
-	parse_query_value(Rest, Acc, Name, << Value/bits, C >>);
-parse_query_value(<< $+, Rest/bits >>, Acc, Name, Value) ->
-	parse_query_value(Rest, Acc, Name, << Value/bits, " " >>);
-parse_query_value(<< $&, Rest/bits >>, Acc, Name, Value) ->
-	parse_query_name(Rest, [{Name, Value}|Acc], <<>>);
-parse_query_value(<< C, Rest/bits >>, Acc, Name, Value) when C =/= $% ->
-	parse_query_value(Rest, Acc, Name, << Value/bits, C >>);
-parse_query_value(<<>>, Acc, Name, Value) ->
-	lists:reverse([{Name, Value}|Acc]).
-
-
-
