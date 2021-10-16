@@ -1,16 +1,22 @@
 -module(ailib_url).
 
+-export([new/0,new/1]).
 -export([parse/1,build/1]).
 -export([parse_query/1,build_query/1]).
 -export([urlencode/1,urldecode/1]).
 
--record(ailib_url_state,{schema = undefined,
-                   authority = undefined,
-                   host = undefined,
-                   port = undefined,
-                   path = undefined,
-                   qs = undefined,
-                   fragment = undefined}).
+
+-record(url,{schema = undefined :: binary(),
+             authority = undefined ::binary(),
+             host = undefined ::binary(),
+             port = undefined ::binary(),
+             path = undefined ::binary(),
+             qs = undefined ::binary(),
+             fragment = undefined ::binary()}).
+
+-type url() :: #url{}.
+-record(ailib_url_state,{array_fun = undefined :: fun(),
+                         url = #url{} :: url()}).
 
 -type state() :: #ailib_url_state{}.
 
@@ -52,12 +58,22 @@
 %%    authority   = [ userinfo "@" ] host [ ":" port ]
 %%    userinfo    = *( unreserved / pct-encoded / sub-delims / ":" )
 
+
 -spec new() -> state().
 new()-> #ailib_url_state{}.
 
+-spec new(fun()) -> state().
+new(ArrayFun)-> #ailib_url_state{array_fun = ArrayFun}.
+
+-spec parse(binary()|list(),state()) -> state().
+parse(U,S)->
+  UBinary = ai_string:to_string(U),
+  parse(schema,UBinary,S).
+
+-sepc parse(binary()|list()) -> state().
 parse(U)->
-    UBinary = ai_string:to_string(U),
-    parse(schema,UBinary,#ailib_url_state{}).
+  UBinary = ai_string:to_string(U),
+  parse(schema,UBinary,#ailib_url_state{}).
 parse(schema,Bin,Acc)->
     case binary:match(Bin, [<<":">>]) of
         nomatch ->
@@ -400,3 +416,6 @@ parse_query_value(<< C, Rest/bits >>, Acc, Name, Value) when C =/= $% ->
 	parse_query_value(Rest, Acc, Name, << Value/bits, C >>);
 parse_query_value(<<>>, Acc, Name, Value) ->
 	lists:reverse([{Name, Value}|Acc]).
+
+
+
