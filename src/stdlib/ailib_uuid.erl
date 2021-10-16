@@ -44,7 +44,7 @@
 %%% @version 1.8.0 {@date} {@time}
 %%%------------------------------------------------------------------------
 
--module(ai_uuid).
+-module(ailib_uuid).
 -author('mjtruog at protonmail dot com').
 
 %% external interface
@@ -82,22 +82,19 @@
 
 -type timestamp_type_internal() :: 'erlang_timestamp' | 'os' | 'warp'.
 
--record(uuid_state,
-    {
-        node_id :: <<_:48>>,
-        clock_seq :: 0..16383,
-        timestamp_type :: timestamp_type_internal(),
-        timestamp_last :: integer() % microseconds
-    }).
+-record(ailib_uuid_state, {node_id :: <<_:48>>,
+                     clock_seq :: 0..16383,
+                     timestamp_type :: timestamp_type_internal(),
+                     timestamp_last :: integer() % microseconds
+                    }).
 
 -type uuid() :: <<_:128>>.
 -type timestamp_type() :: 'erlang' | 'os' | 'warp'.
--type state() :: #uuid_state{}.
+-type ailib_uuid_state() :: #ailib_uuid_state{}.
 -export_type([uuid/0,
               timestamp_type/0,
-              state/0]).
-
--include("ai_uuid.hrl").
+              ailib_uuid_state/0]).
+-include("ailib.hrl").
 
 % Erlang Binary Term Format constants
 % info from http://erlang.org/doc/apps/erts/erl_ext_dist.html
@@ -115,9 +112,7 @@
 %% @end
 %%-------------------------------------------------------------------------
 
--spec new(Pid :: pid()) ->
-    state().
-
+-spec new(Pid :: pid()) -> ailib_uuid_state().
 new(Pid) when is_pid(Pid) ->
     new(Pid, [{timestamp_type, erlang}]).
 
@@ -136,8 +131,8 @@ new(Pid) when is_pid(Pid) ->
 -spec new(Pid :: pid(),
           Options :: timestamp_type() |
                      list({timestamp_type, timestamp_type()} |
-                          {mac_address, list(non_neg_integer())})) ->
-    state().
+                     {mac_address, list(non_neg_integer())})) ->
+    ailib_uuid_state().
 
 new(Pid, TimestampType)
     when is_pid(Pid),
@@ -147,79 +142,65 @@ new(Pid, TimestampType)
     new(Pid, [{timestamp_type, TimestampType}]);
 new(Pid, Options)
     when is_pid(Pid), is_list(Options) ->
-    TimestampType = case lists:keyfind(timestamp_type, 1, Options) of
-        {timestamp_type, Value1} ->
-            Value1;
-        false ->
-            erlang
+  TimestampType =
+    case lists:keyfind(timestamp_type, 1, Options) of
+      {timestamp_type, Value1} -> Value1;
+        false -> erlang
     end,
-    MacAddress = case lists:keyfind(mac_address, 1, Options) of
-        {mac_address, Value2} ->
-            Value2;
-        false ->
-            mac_address()
+  MacAddress =
+    case lists:keyfind(mac_address, 1, Options) of
+        {mac_address, Value2} -> Value2;
+        false ->mac_address()
     end,
 
     % make the version 1 UUID specific to the Erlang node and pid
 
     % 48 bits for the first MAC address found is included with the
     % distributed Erlang node name to be hashed with the node creation count
-    NodeData = [MacAddress, erlang:atom_to_binary(node(), utf8)],
+  NodeData = [MacAddress, erlang:atom_to_binary(node(), utf8)],
 
     % Reduce the node information to 16 bits and the pid information to 32 bits
     % for use as the UUID v1 Node Id
-    {NodeCreationCount, PidData} = case erlang:term_to_binary(Pid) of
-        % (when the pid format changes, handle the different formats)
-        <<?TAG_VERSION:8,
-          ?TAG_PID_EXT:8,PidBin/binary>> ->
-            % 72 bits for the Erlang pid
-            <<PidID1:8,PidID2:8,PidID3:8,PidID4:8,% ID (Node specific, 15 bits)
-              PidSR1:8,PidSR2:8,PidSR3:8,PidSR4:8,% Serial (extra uniqueness)
-              PidCR:8                             % Node Creation Count
-              >> = binary:part(PidBin, erlang:byte_size(PidBin), -9),
-            {PidCR,
-             [PidID1, PidID2, PidID3, PidID4,
-              PidSR1, PidSR2, PidSR3, PidSR4]};
-        % format supported in Erlang/OTP 19.0-rc1
-        % required for Erlang/OTP 23.0 (and Erlang/OTP 22.0-rc2)
-        <<?TAG_VERSION:8,
-          ?TAG_NEW_PID_EXT:8,PidBin/binary>> ->
-            % 96 bits for the Erlang pid
-            <<PidID1:8,PidID2:8,PidID3:8,PidID4:8,% ID (Node specific, 15 bits)
-              PidSR1:8,PidSR2:8,PidSR3:8,PidSR4:8,% Serial (extra uniqueness)
-              PidCR:32                            % Node Creation Count
-              >> = binary:part(PidBin, erlang:byte_size(PidBin), -12),
-            {PidCR,
-             [PidID1, PidID2, PidID3, PidID4,
-              PidSR1, PidSR2, PidSR3, PidSR4]}
+  {NodeCreationCount, PidData} =
+    % (when the pid format changes, handle the different formats)
+    case erlang:term_to_binary(Pid) of
+      <<?TAG_VERSION:8,?TAG_PID_EXT:8,PidBin/binary>> ->
+                                                % 72 bits for the Erlang pid
+        <<PidID1:8,PidID2:8,PidID3:8,PidID4:8,% ID (Node specific, 15 bits)
+          PidSR1:8,PidSR2:8,PidSR3:8,PidSR4:8,% Serial (extra uniqueness)
+          PidCR:8                             % Node Creation Count
+        >> = binary:part(PidBin, erlang:byte_size(PidBin), -9),
+        {PidCR,
+         [PidID1, PidID2, PidID3, PidID4,
+          PidSR1, PidSR2, PidSR3, PidSR4]};
+                                                % format supported in Erlang/OTP 19.0-rc1
+                                                % required for Erlang/OTP 23.0 (and Erlang/OTP 22.0-rc2)
+      <<?TAG_VERSION:8,?TAG_NEW_PID_EXT:8,PidBin/binary>> ->
+                                                % 96 bits for the Erlang pid
+        <<PidID1:8,PidID2:8,PidID3:8,PidID4:8,% ID (Node specific, 15 bits)
+          PidSR1:8,PidSR2:8,PidSR3:8,PidSR4:8,% Serial (extra uniqueness)
+          PidCR:32                            % Node Creation Count
+        >> = binary:part(PidBin, erlang:byte_size(PidBin), -12),
+        {PidCR,
+         [PidID1, PidID2, PidID3, PidID4,
+          PidSR1, PidSR2, PidSR3, PidSR4]}
     end,
-    Node32 = quickrand_hash:jenkins_32(NodeData, NodeCreationCount),
-    Node16 = (Node32 bsr 16) bxor (Node32 band 16#FFFF),
-    Pid32 = quickrand_hash:jenkins_32(PidData),
-    NodeId = <<Node16:16/big-unsigned-integer,
-               Pid32:32/big-unsigned-integer>>,
-
-    ClockSeq = pseudo_random(16384) - 1,
-    TimestampTypeInternal = if
-        TimestampType =:= os ->
-            os;
-        TimestampType =:= erlang ->
-            timestamp_type_erlang();
-        TimestampType =:= warp ->
-            case erlang:function_exported(erlang, system_time, 0) of
-                true ->
-                    % Erlang >= 18.0
-                    warp;
-                false ->
-                    % Erlang < 18.0
-                    erlang:exit(badarg)
-            end
+  Node32 = quickrand_hash:jenkins_32(NodeData, NodeCreationCount),
+  Node16 = (Node32 bsr 16) bxor (Node32 band 16#FFFF),
+  Pid32 = quickrand_hash:jenkins_32(PidData),
+  NodeId = <<Node16:16/big-unsigned-integer,
+             Pid32:32/big-unsigned-integer>>,
+  ClockSeq = pseudo_random(16384) - 1,
+  TimestampTypeInternal =
+    if TimestampType =:= os -> os;
+       TimestampType =:= erlang ->timestamp_type_erlang();
+       TimestampType =:= warp -> wrap % Erlang >= 18.0
     end,
-    TimestampLast = timestamp(TimestampTypeInternal),
-    #uuid_state{node_id = NodeId,
-                clock_seq = ClockSeq,
-                timestamp_type = TimestampTypeInternal,
-                timestamp_last = TimestampLast}.
+  TimestampLast = timestamp(TimestampTypeInternal),
+  #ailib_uuid_state{node_id = NodeId,
+              clock_seq = ClockSeq,
+              timestamp_type = TimestampTypeInternal,
+              timestamp_last = TimestampLast}.
 
 %%-------------------------------------------------------------------------
 %% @doc
@@ -227,10 +208,10 @@ new(Pid, Options)
 %% @end
 %%-------------------------------------------------------------------------
 
--spec get_v1(State :: state()) ->
-    {uuid(), NewState :: state()}.
+-spec get_v1(State :: ailib_uuid_state()) ->
+    {uuid(), NewState :: ailib_uuid_state()}.
 
-get_v1(#uuid_state{node_id = NodeId,
+get_v1(#ailib_uuid_state{node_id = NodeId,
                    clock_seq = ClockSeq,
                    timestamp_type = TimestampTypeInternal,
                    timestamp_last = TimestampLast} = State) ->
@@ -246,7 +227,7 @@ get_v1(#uuid_state{node_id = NodeId,
        1:1, 0:1,            % RFC 4122 variant bits
        ClockSeq:14,
        NodeId/binary>>,
-     State#uuid_state{timestamp_last = MicroSeconds}}.
+     State#ailib_uuid_state{timestamp_last = MicroSeconds}}.
 
 %%-------------------------------------------------------------------------
 %% @doc
@@ -268,7 +249,7 @@ get_v1_time() ->
 %% @end
 %%-------------------------------------------------------------------------
 
--spec get_v1_time(timestamp_type() | state() | uuid()) ->
+-spec get_v1_time(timestamp_type() | ailib_uuid_state() | uuid()) ->
     non_neg_integer().
 
 get_v1_time(erlang) ->
@@ -280,7 +261,7 @@ get_v1_time(os) ->
 get_v1_time(warp) ->
     timestamp(warp);
 
-get_v1_time(#uuid_state{timestamp_type = TimestampTypeInternal}) ->
+get_v1_time(#ailib_uuid_state{timestamp_type = TimestampTypeInternal}) ->
     timestamp(TimestampTypeInternal);
 
 get_v1_time(Value)
@@ -301,7 +282,7 @@ get_v1_time(Value)
 %% @end
 %%-------------------------------------------------------------------------
 
--spec get_v1_datetime(Value :: timestamp_type() | state() | uuid() |
+-spec get_v1_datetime(Value :: timestamp_type() | ailib_uuid_state() | uuid() |
                                erlang:timestamp()) ->
     string().
 
@@ -334,7 +315,7 @@ get_v1_datetime(Value) ->
 %% @end
 %%-------------------------------------------------------------------------
 
--spec get_v1_datetime(Value :: timestamp_type() | state() | uuid() |
+-spec get_v1_datetime(Value :: timestamp_type() | ailib_uuid_state() | uuid() |
                                erlang:timestamp(),
                       MicroSecondsOffset :: integer()) ->
     string().
@@ -495,8 +476,8 @@ is_v3(_) ->
 get_v4() ->
     get_v4(strong).
 
--spec get_v4('strong' | 'cached' | quickrand_cache:state()) ->
-    uuid() | {uuid(), quickrand_cache:state()}.
+-spec get_v4('strong' | 'cached' | quickrand_cache:ailib_uuid_state()) ->
+    uuid() | {uuid(), quickrand_cache:ailib_uuid_state()}.
 
 get_v4(strong) ->
     <<Rand1:48, _:4, Rand2:12, _:2, Rand3:62>> =
@@ -891,9 +872,7 @@ is_uuid(_) ->
 %% @end
 %%-------------------------------------------------------------------------
 
--spec increment(state() | uuid()) ->
-    state() | uuid().
-
+-spec increment(ailib_uuid_state() | uuid()) -> ailib_uuid_state() | uuid().
 increment(<<TimeLow:32, TimeMid:16,
             0:1, 0:1, 0:1, 1:1,  % version 1 bits
             TimeHigh:12,
@@ -939,7 +918,7 @@ increment(<<Rand1:48,
       NewRand2:12,
       1:1, 0:1,            % RFC 4122 variant bits
       NewRand3:62>>;
-increment(#uuid_state{clock_seq = ClockSeq} = State) ->
+increment(#ailib_uuid_state{clock_seq = ClockSeq} = State) ->
     NextClockSeq = ClockSeq + 1,
     NewClockSeq = if
         NextClockSeq == 16384 ->
@@ -947,7 +926,7 @@ increment(#uuid_state{clock_seq = ClockSeq} = State) ->
         true ->
             NextClockSeq
     end,
-    State#uuid_state{clock_seq = NewClockSeq}.
+    State#ailib_uuid_state{clock_seq = NewClockSeq}.
 
 %%-------------------------------------------------------------------------
 %% @doc
