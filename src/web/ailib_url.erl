@@ -1,10 +1,20 @@
 -module(ailib_url).
 
--include("ailib.hrl").
-
 -export([parse/1,build/1]).
 -export([parse_query/1,build_query/1]).
 -export([urlencode/1,urldecode/1]).
+
+-record(ailib_url_state,{schema = undefined,
+                   authority = undefined,
+                   host = undefined,
+                   port = undefined,
+                   path = undefined,
+                   qs = undefined,
+                   fragment = undefined}).
+
+-type state() :: #ailib_url_state{}.
+
+-export_type([state/0]).
 
 
 %% This is from chapter 3, Syntax Components, of RFC 3986:
@@ -32,7 +42,7 @@
 %%
 %%          foo://example.com:8042/over/there?name=ferret#nose
 %%          \_/   \______________/\_________/ \_________/ \__/
-%%           |           |            |            |        |
+%%           |           |            |            |        |X2
 %%        scheme     authority       path        query   fragment
 %%           |   _____________________|__
 %%          / \ /                        \
@@ -42,9 +52,12 @@
 %%    authority   = [ userinfo "@" ] host [ ":" port ]
 %%    userinfo    = *( unreserved / pct-encoded / sub-delims / ":" )
 
+-spec new() -> state().
+new()-> #ailib_url_state{}.
+
 parse(U)->
     UBinary = ai_string:to_string(U),
-    parse(schema,UBinary,#ailib_url{}).
+    parse(schema,UBinary,#ailib_url_state{}).
 parse(schema,Bin,Acc)->
     case binary:match(Bin, [<<":">>]) of
         nomatch ->
@@ -57,7 +70,7 @@ parse(schema,Bin,Acc)->
             if
                 DoubleSlash == true ->
                     Rest  = binary:part(Bin, Pos, byte_size(Bin) - Pos),
-                    parse(authority,Rest,Acc#ailib_url{schema = MaybeSchema});
+                    parse(authority,Rest,Acc#ailib_url_state{schema = MaybeSchema});
                 true ->
                     parse(authority,Bin,Acc)
             end
@@ -69,11 +82,11 @@ parse(authority,<<"//",Bin/bits>>,Acc)->
             %% example.com/
             %% example.com
             case binary:match(Bin,[<<"/">>]) of
-                nomatch -> Acc#ailib_url{authority = Bin,host = Bin,path = <<"/">>}; %example.com
+                nomatch -> Acc#ailib_url_state{authority = Bin,host = Bin,path = <<"/">>}; %example.com
                 {S1,_L1}->
                     Authority = binary:part(Bin,0,S1),
                     Rest = binary:part(Bin,S1,byte_size(Bin) - S1),
-                    parse(path,Rest,Acc#ailib_url{authority = Authority,host = Authority})
+                    parse(path,Rest,Acc#ailib_url_state{authority = Authority,host = Authority})
             end;
         {S,L}->
             case binary:match(Bin,[<<"/">>]) of
@@ -81,13 +94,13 @@ parse(authority,<<"//",Bin/bits>>,Acc)->
                     Pos = S + L,
                     Port = binary:part(Bin,Pos,byte_size(Bin) - Pos),
                     Host = binary:part(Bin,0,S),
-                    Acc#ailib_url{authority = Bin,host = Host,port = Port,path = <<"/">>}; %example.com
+                    Acc#ailib_url_state{authority = Bin,host = Host,port = Port,path = <<"/">>}; %example.com
                 {S2,_L2}->
                     Pos = S + L,
                     Port = binary:part(Bin,Pos,S2 - Pos),
                     Host = binary:part(Bin,0,S),
                     Rest = binary:part(Bin,S2,byte_size(Bin) - S2),
-                    parse(path,Rest,Acc#ailib_url{authority = <<Host/binary,":",Port/binary>>,host = Host,port = Port})
+                    parse(path,Rest,Acc#ailib_url_state{authority = <<Host/binary,":",Port/binary>>,host = Host,port = Port})
 
             end
     end;
@@ -105,12 +118,12 @@ parse(path,Bin,Acc)->
             %% example.com/a/b/c#c=x&d=n
             case binary:match(Bin,[<<"#">>]) of
                 nomatch -> %% example.com/a/b/c
-                    Acc#ailib_url{path = Bin};
+                    Acc#ailib_url_state{path = Bin};
                 {S,L}->
                     Path = binary:part(Bin,0,S),
                     Pos = S + L,
                     Rest  = binary:part(Bin, Pos, byte_size(Bin) - Pos),
-                    parse(fragment,Rest,Acc#ailib_url{path = Path})
+                    parse(fragment,Rest,Acc#ailib_url_state{path = Path})
             end;
         {S1,L1}->
             %% example.com/a/b/c?1=&2=
@@ -118,7 +131,7 @@ parse(path,Bin,Acc)->
             Path = binary:part(Bin,0,S1),
             Pos = S1 + L1,
             Rest = binary:part(Bin,Pos,byte_size(Bin) - Pos),
-            parse(qs,Rest,Acc#ailib_url{path = Path})
+            parse(qs,Rest,Acc#ailib_url_state{path = Path})
     end;
 parse(qs,Bin,Acc)->
     case binary:match(Bin,[<<"#">>]) of
@@ -127,7 +140,7 @@ parse(qs,Bin,Acc)->
             QS0 = lists:map(fun({K,V})->
                                     {urldecode(K),urldecode(V)}
                             end,QS),
-            Acc#ailib_url{qs = QS0};
+            Acc#ailib_url_state{qs = QS0};
         {S,L} ->
             Query = binary:part(Bin,0,S),
             QS = parse_query(Query),
@@ -136,20 +149,20 @@ parse(qs,Bin,Acc)->
                             end,QS),
             Pos = S + L,
             Rest = binary:part(Bin,Pos,byte_size(Bin) - Pos),
-            parse(fragment,Rest,Acc#ailib_url{qs = QS0})
+            parse(fragment,Rest,Acc#ailib_url_state{qs = QS0})
 end;
 parse(fragment,Bin,Acc)->
     QS = parse_query(Bin),
     QS0 = lists:map(fun({K,V})->
             {urldecode(K),urldecode(V)}
         end,QS),
-    Acc#ailib_url{fragment = QS0}.
+    Acc#ailib_url_state{fragment = QS0}.
 
 
 build(Record)->
     build(schema,Record,<<>>).
 build(schema,Record,Acc)->
-    case Record#ailib_url.schema of
+    case Record#ailib_url_state.schema of
         undefined ->
             build(authority,Record,Acc);
         Schema ->
@@ -157,10 +170,10 @@ build(schema,Record,Acc)->
             build(authority,Record,<<Acc/binary,SchemaBin/binary,"://">>)
     end;
 build(authority,Record,Acc)->
-    case {Record#ailib_url.authority,Record#ailib_url.host} of
+    case {Record#ailib_url_state.authority,Record#ailib_url_state.host} of
         {undefined,undefined} ->  build(path,Record,Acc);
         {undefined,Host}->
-            case Record#ailib_url.port of
+            case Record#ailib_url_state.port of
                 undefined ->
                     HostBin = ai_string:to_string(Host),
                     build(path,Record,<<Acc/binary,HostBin/binary>>);
@@ -174,14 +187,14 @@ build(authority,Record,Acc)->
             build(path,Record,<<Acc/binary,AuthorityBin/binary>>)
     end;
 build(path,Record,Acc)->
-    case Record#ailib_url.path of
+    case Record#ailib_url_state.path of
         undefined -> build(qs,Record,<<Acc/binary,"/">>);
         Path ->
             PathBin = ai_string:to_string(Path),
             build(qs,Record,<<Acc/binary,PathBin/binary>>)
     end;
 build(qs,Record,Acc)->
-    case Record#ailib_url.qs of
+    case Record#ailib_url_state.qs of
         undefined -> build(fragment,Record,Acc);
         QS ->
             Q = lists:map(fun({Key,Value})->
@@ -202,7 +215,7 @@ build(qs,Record,Acc)->
             end
     end;
 build(fragment,Record,Acc)->
-    case Record#ailib_url.fragment of
+    case Record#ailib_url_state.fragment of
         undefined -> Acc;
         QS ->
             Q = lists:map(fun({Key,Value})->

@@ -90,12 +90,15 @@
 
 -type uuid() :: <<_:128>>.
 -type timestamp_type() :: 'erlang' | 'os' | 'warp'.
--type ailib_uuid_state() :: #ailib_uuid_state{}.
+-type state() :: #ailib_uuid_state{}.
 -export_type([uuid/0,
               timestamp_type/0,
-              ailib_uuid_state/0]).
--include("ailib.hrl").
+              state/0]).
 
+-define(UUID_NAMESPACE_DNS,  <<16#6ba7b8109dad11d180b400c04fd430c8:128>>).
+-define(UUID_NAMESPACE_URL,  <<16#6ba7b8119dad11d180b400c04fd430c8:128>>).
+-define(UUID_NAMESPACE_OID,  <<16#6ba7b8129dad11d180b400c04fd430c8:128>>).
+-define(UUID_NAMESPACE_X500, <<16#6ba7b8149dad11d180b400c04fd430c8:128>>).
 % Erlang Binary Term Format constants
 % info from http://erlang.org/doc/apps/erts/erl_ext_dist.html
 -define(TAG_VERSION, 131).
@@ -112,7 +115,7 @@
 %% @end
 %%-------------------------------------------------------------------------
 
--spec new(Pid :: pid()) -> ailib_uuid_state().
+-spec new(Pid :: pid()) -> state().
 new(Pid) when is_pid(Pid) ->
     new(Pid, [{timestamp_type, erlang}]).
 
@@ -132,7 +135,7 @@ new(Pid) when is_pid(Pid) ->
           Options :: timestamp_type() |
                      list({timestamp_type, timestamp_type()} |
                      {mac_address, list(non_neg_integer())})) ->
-    ailib_uuid_state().
+    state().
 
 new(Pid, TimestampType)
     when is_pid(Pid),
@@ -193,7 +196,7 @@ new(Pid, Options)
   ClockSeq = pseudo_random(16384) - 1,
   TimestampTypeInternal =
     if TimestampType =:= os -> os;
-       TimestampType =:= erlang ->timestamp_type_erlang();
+       TimestampType =:= erlang -> erlang_timestamp;
        TimestampType =:= warp -> wrap % Erlang >= 18.0
     end,
   TimestampLast = timestamp(TimestampTypeInternal),
@@ -208,8 +211,8 @@ new(Pid, Options)
 %% @end
 %%-------------------------------------------------------------------------
 
--spec get_v1(State :: ailib_uuid_state()) ->
-    {uuid(), NewState :: ailib_uuid_state()}.
+-spec get_v1(State :: state()) ->
+    {uuid(), NewState :: state()}.
 
 get_v1(#ailib_uuid_state{node_id = NodeId,
                    clock_seq = ClockSeq,
@@ -249,7 +252,7 @@ get_v1_time() ->
 %% @end
 %%-------------------------------------------------------------------------
 
--spec get_v1_time(timestamp_type() | ailib_uuid_state() | uuid()) ->
+-spec get_v1_time(timestamp_type() | state() | uuid()) ->
     non_neg_integer().
 
 get_v1_time(erlang) ->
@@ -282,7 +285,7 @@ get_v1_time(Value)
 %% @end
 %%-------------------------------------------------------------------------
 
--spec get_v1_datetime(Value :: timestamp_type() | ailib_uuid_state() | uuid() |
+-spec get_v1_datetime(Value :: timestamp_type() | state() | uuid() |
                                erlang:timestamp()) ->
     string().
 
@@ -315,7 +318,7 @@ get_v1_datetime(Value) ->
 %% @end
 %%-------------------------------------------------------------------------
 
--spec get_v1_datetime(Value :: timestamp_type() | ailib_uuid_state() | uuid() |
+-spec get_v1_datetime(Value :: timestamp_type() | state() | uuid() |
                                erlang:timestamp(),
                       MicroSecondsOffset :: integer()) ->
     string().
@@ -377,20 +380,14 @@ get_v3(Data) when is_binary(Data) ->
              Data :: binary() | iolist()) ->
     uuid().
 
-get_v3(dns, Data) ->
-    get_v3(?UUID_NAMESPACE_DNS, Data);
-get_v3(url, Data) ->
-    get_v3(?UUID_NAMESPACE_URL, Data);
-get_v3(oid, Data) ->
-    get_v3(?UUID_NAMESPACE_OID, Data);
-get_v3(x500, Data) ->
-    get_v3(?UUID_NAMESPACE_X500, Data);
+get_v3(dns, Data) -> get_v3(?UUID_NAMESPACE_DNS, Data);
+get_v3(url, Data) -> get_v3(?UUID_NAMESPACE_URL, Data);
+get_v3(oid, Data) -> get_v3(?UUID_NAMESPACE_OID, Data);
+get_v3(x500, Data) -> get_v3(?UUID_NAMESPACE_X500, Data);
 get_v3(Namespace, Data) when is_binary(Namespace) ->
-    DataBin = if
-        is_binary(Data) ->
-            Data;
-        is_list(Data) ->
-            erlang:iolist_to_binary(Data)
+  DataBin =
+    if is_binary(Data) -> Data;
+       is_list(Data) -> erlang:iolist_to_binary(Data)
     end,
     get_v3(<<Namespace/binary, DataBin/binary>>).
 
@@ -402,18 +399,14 @@ get_v3(Namespace, Data) when is_binary(Namespace) ->
 %% @end
 %%-------------------------------------------------------------------------
 
--spec get_v3_compat(Data :: binary()) ->
-    uuid().
-
+-spec get_v3_compat(Data :: binary()) ->uuid().
 get_v3_compat(Data) when is_binary(Data) ->
-    <<B1:48, _:4, B2:12, _:2, B3:14, B4:48>> =
-        crypto:hash(md5, Data),
+    <<B1:48, _:4, B2:12, _:2, B3:14, B4:48>> = crypto:hash(md5, Data),
     <<B1:48,
       0:1, 0:1, 1:1, 1:1,  % version 3 bits
       B2:12,
       1:1, 0:1,            % RFC 4122 variant bits
-      B3:14,
-      B4:48>>.
+      B3:14, B4:48>>.
 
 %%-------------------------------------------------------------------------
 %% @doc
@@ -424,25 +417,18 @@ get_v3_compat(Data) when is_binary(Data) ->
 %%-------------------------------------------------------------------------
 
 -spec get_v3_compat(Namespace :: dns | url | oid | x500 | binary(),
-                    Data :: binary() | iolist()) ->
-    uuid().
+                    Data :: binary() | iolist()) ->uuid().
 
-get_v3_compat(dns, Data) ->
-    get_v3_compat(?UUID_NAMESPACE_DNS, Data);
-get_v3_compat(url, Data) ->
-    get_v3_compat(?UUID_NAMESPACE_URL, Data);
-get_v3_compat(oid, Data) ->
-    get_v3_compat(?UUID_NAMESPACE_OID, Data);
-get_v3_compat(x500, Data) ->
-    get_v3_compat(?UUID_NAMESPACE_X500, Data);
+get_v3_compat(dns, Data) -> get_v3_compat(?UUID_NAMESPACE_DNS, Data);
+get_v3_compat(url, Data) -> get_v3_compat(?UUID_NAMESPACE_URL, Data);
+get_v3_compat(oid, Data) -> get_v3_compat(?UUID_NAMESPACE_OID, Data);
+get_v3_compat(x500, Data) -> get_v3_compat(?UUID_NAMESPACE_X500, Data);
 get_v3_compat(Namespace, Data) when is_binary(Namespace) ->
-    DataBin = if
-        is_binary(Data) ->
-            Data;
-        is_list(Data) ->
-            erlang:iolist_to_binary(Data)
+  DataBin =
+    if is_binary(Data) -> Data;
+       is_list(Data) -> erlang:iolist_to_binary(Data)
     end,
-    get_v3_compat(<<Namespace/binary, DataBin/binary>>).
+  get_v3_compat(<<Namespace/binary, DataBin/binary>>).
 
 %%-------------------------------------------------------------------------
 %% @doc
@@ -450,9 +436,7 @@ get_v3_compat(Namespace, Data) when is_binary(Namespace) ->
 %% @end
 %%-------------------------------------------------------------------------
 
--spec is_v3(Value :: any()) ->
-    boolean().
-
+-spec is_v3(Value :: any()) ->boolean().
 is_v3(<<_:48,
         0:1, 0:1, 1:1, 1:1,  % version 3 bits
         _:12,
@@ -470,19 +454,16 @@ is_v3(_) ->
 %% @end
 %%-------------------------------------------------------------------------
 
--spec get_v4() ->
-    uuid().
+-spec get_v4() ->uuid().
+get_v4() -> get_v4(strong).
 
-get_v4() ->
-    get_v4(strong).
-
--spec get_v4('strong' | 'cached' | quickrand_cache:ailib_uuid_state()) ->
-    uuid() | {uuid(), quickrand_cache:ailib_uuid_state()}.
+-spec get_v4('strong' | 'cached' | quickrand_cache:state()) ->
+    uuid() | {uuid(), quickrand_cache:state()}.
 
 get_v4(strong) ->
-    <<Rand1:48, _:4, Rand2:12, _:2, Rand3:62>> =
-        crypto:strong_rand_bytes(16),
-    <<Rand1:48,
+  <<Rand1:48, _:4, Rand2:12, _:2, Rand3:62>> =
+    crypto:strong_rand_bytes(16),
+  <<Rand1:48,
       0:1, 1:1, 0:1, 0:1,  % version 4 bits
       Rand2:12,
       1:1, 0:1,            % RFC 4122 variant bits
@@ -516,9 +497,7 @@ get_v4(Cache) when element(1, Cache) =:= quickrand_cache ->
 %% @end
 %%-------------------------------------------------------------------------
 
--spec get_v4_urandom() ->
-    uuid().
-
+-spec get_v4_urandom() ->uuid().
 get_v4_urandom() ->
     % random 122 bits
     Rand = random_wh06_int:uniform(5316911983139663491615228241121378304) - 1,
@@ -535,9 +514,7 @@ get_v4_urandom() ->
 %% @end
 %%-------------------------------------------------------------------------
 
--spec is_v4(Value :: any()) ->
-    boolean().
-
+-spec is_v4(Value :: any()) ->boolean().
 is_v4(<<_:48,
         0:1, 1:1, 0:1, 0:1,  % version 4 bits
         _:12,
@@ -553,19 +530,17 @@ is_v4(_) ->
 %% @end
 %%-------------------------------------------------------------------------
 
--spec get_v5(Data :: binary()) ->
-    uuid().
-
+-spec get_v5(Data :: binary()) ->uuid().
 get_v5(Data) when is_binary(Data) ->
-    <<B1:48, B4a:4, B2:12, B4b:2, B3:14, B4c:32, B4d:48>> =
-        crypto:hash(sha, Data),
-    B4 = ((B4a bxor B4b) bxor B4c) bxor B4d,
-    <<B1:48,
-      0:1, 1:1, 0:1, 1:1,  % version 5 bits
-      B2:12,
-      1:1, 0:1,            % RFC 4122 variant bits
-      B3:14,
-      B4:48>>.
+  <<B1:48, B4a:4, B2:12, B4b:2, B3:14, B4c:32, B4d:48>> =
+    crypto:hash(sha, Data),
+  B4 = ((B4a bxor B4b) bxor B4c) bxor B4d,
+  <<B1:48,
+    0:1, 1:1, 0:1, 1:1,  % version 5 bits
+    B2:12,
+    1:1, 0:1,            % RFC 4122 variant bits
+    B3:14,
+    B4:48>>.
 
 %%-------------------------------------------------------------------------
 %% @doc
@@ -574,25 +549,17 @@ get_v5(Data) when is_binary(Data) ->
 %%-------------------------------------------------------------------------
 
 -spec get_v5(Namespace :: dns | url | oid | x500 | binary(),
-             Data :: binary() | iolist()) ->
-    uuid().
-
-get_v5(dns, Data) ->
-    get_v5(?UUID_NAMESPACE_DNS, Data);
-get_v5(url, Data) ->
-    get_v5(?UUID_NAMESPACE_URL, Data);
-get_v5(oid, Data) ->
-    get_v5(?UUID_NAMESPACE_OID, Data);
-get_v5(x500, Data) ->
-    get_v5(?UUID_NAMESPACE_X500, Data);
+             Data :: binary() | iolist()) ->uuid().
+get_v5(dns, Data) -> get_v5(?UUID_NAMESPACE_DNS, Data);
+get_v5(url, Data) -> get_v5(?UUID_NAMESPACE_URL, Data);
+get_v5(oid, Data) -> get_v5(?UUID_NAMESPACE_OID, Data);
+get_v5(x500, Data) -> get_v5(?UUID_NAMESPACE_X500, Data);
 get_v5(Namespace, Data) when is_binary(Namespace) ->
-    DataBin = if
-        is_binary(Data) ->
-            Data;
-        is_list(Data) ->
-            erlang:iolist_to_binary(Data)
+  DataBin =
+    if is_binary(Data) -> Data;
+       is_list(Data) -> erlang:iolist_to_binary(Data)
     end,
-    get_v5(<<Namespace/binary, DataBin/binary>>).
+  get_v5(<<Namespace/binary, DataBin/binary>>).
 
 %%-------------------------------------------------------------------------
 %% @doc
@@ -602,9 +569,7 @@ get_v5(Namespace, Data) when is_binary(Namespace) ->
 %% @end
 %%-------------------------------------------------------------------------
 
--spec get_v5_compat(Data :: binary()) ->
-    uuid().
-
+-spec get_v5_compat(Data :: binary()) ->uuid().
 get_v5_compat(Data) when is_binary(Data) ->
     <<B1:48, _:4, B2:12, _:2, B3:14, B4:48, _:32>> =
         crypto:hash(sha, Data),
@@ -627,22 +592,16 @@ get_v5_compat(Data) when is_binary(Data) ->
                     Data :: binary() | iolist()) ->
     uuid().
 
-get_v5_compat(dns, Data) ->
-    get_v5_compat(?UUID_NAMESPACE_DNS, Data);
-get_v5_compat(url, Data) ->
-    get_v5_compat(?UUID_NAMESPACE_URL, Data);
-get_v5_compat(oid, Data) ->
-    get_v5_compat(?UUID_NAMESPACE_OID, Data);
-get_v5_compat(x500, Data) ->
-    get_v5_compat(?UUID_NAMESPACE_X500, Data);
+get_v5_compat(dns, Data) -> get_v5_compat(?UUID_NAMESPACE_DNS, Data);
+get_v5_compat(url, Data) -> get_v5_compat(?UUID_NAMESPACE_URL, Data);
+get_v5_compat(oid, Data) -> get_v5_compat(?UUID_NAMESPACE_OID, Data);
+get_v5_compat(x500, Data) -> get_v5_compat(?UUID_NAMESPACE_X500, Data);
 get_v5_compat(Namespace, Data) when is_binary(Namespace) ->
-    DataBin = if
-        is_binary(Data) ->
-            Data;
-        is_list(Data) ->
-            erlang:iolist_to_binary(Data)
+  DataBin =
+    if is_binary(Data) ->Data;
+       is_list(Data) ->erlang:iolist_to_binary(Data)
     end,
-    get_v5_compat(<<Namespace/binary, DataBin/binary>>).
+  get_v5_compat(<<Namespace/binary, DataBin/binary>>).
 
 %%-------------------------------------------------------------------------
 %% @doc
@@ -650,9 +609,7 @@ get_v5_compat(Namespace, Data) when is_binary(Namespace) ->
 %% @end
 %%-------------------------------------------------------------------------
 
--spec is_v5(Value :: any()) ->
-    boolean().
-
+-spec is_v5(Value :: any()) -> boolean().
 is_v5(<<_:48,
         0:1, 1:1, 0:1, 1:1,  % version 5 bits
         _:12,
@@ -668,9 +625,7 @@ is_v5(_) ->
 %% @end
 %%-------------------------------------------------------------------------
 
--spec uuid_to_list(uuid()) ->
-    iolist().
-
+-spec uuid_to_list(uuid()) -> iolist().
 uuid_to_list(<<B1:32/unsigned-integer,
                B2:16/unsigned-integer,
                B3:16/unsigned-integer,
@@ -684,9 +639,7 @@ uuid_to_list(<<B1:32/unsigned-integer,
 %% @end
 %%-------------------------------------------------------------------------
 
--spec uuid_to_string(Value :: uuid()) ->
-    string().
-
+-spec uuid_to_string(Value :: uuid()) -> string().
 uuid_to_string(Value) ->
     uuid_to_string(Value, standard).
 
@@ -701,7 +654,6 @@ uuid_to_string(Value) ->
                                list_standard | list_nodash |
                                binary_standard | binary_nodash) ->
     string() | binary().
-
 uuid_to_string(<<Value:128/unsigned-integer>>, standard) ->
     [N01, N02, N03, N04, N05, N06, N07, N08,
      N09, N10, N11, N12,
@@ -715,15 +667,9 @@ uuid_to_string(<<Value:128/unsigned-integer>>, standard) ->
      N17, N18, N19, N20, $-,
      N21, N22, N23, N24, N25, N26, N27, N28, N29, N30, N31, N32];
 
-uuid_to_string(<<Value:128/unsigned-integer>>, nodash) ->
-    int_to_hex_list(Value, 32);
-
-uuid_to_string(Value, list_standard) ->
-    uuid_to_string(Value, standard);
-
-uuid_to_string(Value, list_nodash) ->
-    uuid_to_string(Value, nodash);
-
+uuid_to_string(<<Value:128/unsigned-integer>>, nodash) -> int_to_hex_list(Value, 32);
+uuid_to_string(Value, list_standard) -> uuid_to_string(Value, standard);
+uuid_to_string(Value, list_nodash) -> uuid_to_string(Value, nodash);
 uuid_to_string(<<Value:128/unsigned-integer>>, binary_standard) ->
     [N01, N02, N03, N04, N05, N06, N07, N08,
      N09, N10, N11, N12,
@@ -736,7 +682,6 @@ uuid_to_string(<<Value:128/unsigned-integer>>, binary_standard) ->
       N13, N14, N15, N16, $-,
       N17, N18, N19, N20, $-,
       N21, N22, N23, N24, N25, N26, N27, N28, N29, N30, N31, N32>>;
-
 uuid_to_string(<<Value:128/unsigned-integer>>, binary_nodash) ->
     [N01, N02, N03, N04, N05, N06, N07, N08,
      N09, N10, N11, N12,
@@ -756,9 +701,7 @@ uuid_to_string(<<Value:128/unsigned-integer>>, binary_nodash) ->
 %% @end
 %%-------------------------------------------------------------------------
 
--spec string_to_uuid(string() | binary()) ->
-    uuid().
-
+-spec string_to_uuid(string() | binary()) ->uuid().
 string_to_uuid([N01, N02, N03, N04, N05, N06, N07, N08, $-,
                 N09, N10, N11, N12, $-,
                 N13, N14, N15, N16, $-,
@@ -872,61 +815,47 @@ is_uuid(_) ->
 %% @end
 %%-------------------------------------------------------------------------
 
--spec increment(ailib_uuid_state() | uuid()) -> ailib_uuid_state() | uuid().
+-spec increment(state() | uuid()) -> state() | uuid().
 increment(<<TimeLow:32, TimeMid:16,
             0:1, 0:1, 0:1, 1:1,  % version 1 bits
             TimeHigh:12,
             1:1, 0:1,            % RFC 4122 variant bits
             ClockSeq:14,
             NodeId:48>>) ->
-    NextClockSeq = ClockSeq + 1,
-    NewClockSeq = if
-        NextClockSeq == 16384 ->
-            0;
-        true ->
-            NextClockSeq
+  NextClockSeq = ClockSeq + 1,
+  NewClockSeq =
+    if NextClockSeq == 16384 -> 0;
+       true -> NextClockSeq
     end,
-    <<TimeLow:32, TimeMid:16,
-      0:1, 0:1, 0:1, 1:1,  % version 1 bits
-      TimeHigh:12,
-      1:1, 0:1,            % RFC 4122 variant bits
-      NewClockSeq:14,
-      NodeId:48>>;
-increment(<<Rand1:48,
-            Version:4/unsigned-integer,
-            Rand2:12,
+  <<TimeLow:32, TimeMid:16,
+    0:1, 0:1, 0:1, 1:1,  % version 1 bits
+    TimeHigh:12,
+    1:1, 0:1,            % RFC 4122 variant bits
+    NewClockSeq:14,
+    NodeId:48>>;
+increment(<<Rand1:48,Version:4/unsigned-integer,Rand2:12,
             1:1, 0:1,            % RFC 4122 variant bits
             Rand3:62>>)
-    when (Version == 4) orelse (Version == 5) orelse (Version == 3) ->
-    <<Value:16/little-unsigned-integer-unit:8>> = <<Rand1:48,
-                                                    Rand2:12,
-                                                    Rand3:62,
-                                                    0:6>>,
-    NextValue = Value + 1,
-    NewValue = if
-        NextValue == 5316911983139663491615228241121378304 ->
-            1;
-        true ->
-            NextValue
+  when (Version == 4) orelse (Version == 5) orelse (Version == 3) ->
+  <<Value:16/little-unsigned-integer-unit:8>> = <<Rand1:48,Rand2:12,
+                                                  Rand3:62,0:6>>,
+  NextValue = Value + 1,
+  NewValue =
+    if NextValue == 5316911983139663491615228241121378304 -> 1;
+       true -> NextValue
     end,
-    <<NewRand1:48,
-      NewRand2:12,
-      NewRand3:62,
-      0:6>> = <<NewValue:16/little-unsigned-integer-unit:8>>,
-    <<NewRand1:48,
-      Version:4/unsigned-integer,
-      NewRand2:12,
-      1:1, 0:1,            % RFC 4122 variant bits
-      NewRand3:62>>;
+  <<NewRand1:48,NewRand2:12,
+    NewRand3:62,0:6>> = <<NewValue:16/little-unsigned-integer-unit:8>>,
+  <<NewRand1:48,Version:4/unsigned-integer,NewRand2:12,
+    1:1, 0:1,            % RFC 4122 variant bits
+    NewRand3:62>>;
 increment(#ailib_uuid_state{clock_seq = ClockSeq} = State) ->
-    NextClockSeq = ClockSeq + 1,
-    NewClockSeq = if
-        NextClockSeq == 16384 ->
-            0;
-        true ->
-            NextClockSeq
+  NextClockSeq = ClockSeq + 1,
+  NewClockSeq =
+    if NextClockSeq == 16384 -> 0;
+       true -> NextClockSeq
     end,
-    State#ailib_uuid_state{clock_seq = NewClockSeq}.
+  State#ailib_uuid_state{clock_seq = NewClockSeq}.
 
 %%-------------------------------------------------------------------------
 %% @doc
@@ -934,9 +863,7 @@ increment(#ailib_uuid_state{clock_seq = ClockSeq} = State) ->
 %% @end
 %%-------------------------------------------------------------------------
 
--spec mac_address() ->
-    list(non_neg_integer()).
-
+-spec mac_address() ->list(non_neg_integer()).
 mac_address() ->
     {ok, Ifs} = inet:getifaddrs(),
     mac_address(lists:keysort(1, Ifs)).
@@ -947,9 +874,7 @@ mac_address() ->
 %% @end
 %%-------------------------------------------------------------------------
 
--spec test() ->
-    ok.
-
+-spec test() ->ok.
 test() ->
     true = uuid:is_uuid(<<0:128>>),
     % version 1 tests
@@ -1190,88 +1115,55 @@ test() ->
            {hex_to_int,1}]}).
 
 
-timestamp_type_erlang() ->
-    % Erlang >= 18.0
-    true = erlang:function_exported(erlang, system_time, 0),
-    erlang_timestamp.
-
-
-timestamp(erlang_timestamp) ->
-    erlang:system_time(microsecond);
-timestamp(os) ->
-    os:system_time(microsecond);
-timestamp(warp) ->
-    erlang:system_time(microsecond).
-
+timestamp(erlang_timestamp) ->erlang:system_time(microsecond);
+timestamp(os) -> os:system_time(microsecond);
+timestamp(warp) -> erlang:system_time(microsecond).
 timestamp(erlang_timestamp, TimestampLast) ->
-    TimestampNext = timestamp(erlang_timestamp),
-    if
-        TimestampNext > TimestampLast ->
-            TimestampNext;
-        true ->
-            TimestampLast + 1
-    end;
-timestamp(os, _) ->
-    timestamp(os);
-timestamp(warp, _) ->
-    timestamp(warp).
+  TimestampNext = timestamp(erlang_timestamp),
+  if TimestampNext > TimestampLast -> TimestampNext;
+     true -> TimestampLast + 1
+  end;
+timestamp(os, _) -> timestamp(os);
+timestamp(warp, _) -> timestamp(warp).
 
 int_to_dec_list(I, N) when is_integer(I), I >= 0 ->
-    int_to_dec_list([], I, 1, N).
+  int_to_dec_list([], I, 1, N).
 
-int_to_dec_list(L, I, Count, N)
-    when I < 10 ->
-    int_to_list_pad([int_to_dec(I) | L], N - Count);
+int_to_dec_list(L, I, Count, N) when I < 10 ->
+  int_to_list_pad([int_to_dec(I) | L], N - Count);
 int_to_dec_list(L, I, Count, N) ->
-    int_to_dec_list([int_to_dec(I rem 10) | L], I div 10, Count + 1, N).
+  int_to_dec_list([int_to_dec(I rem 10) | L], I div 10, Count + 1, N).
 
 int_to_hex_list(I, N) when is_integer(I), I >= 0 ->
-    int_to_hex_list([], I, 1, N).
+  int_to_hex_list([], I, 1, N).
 
-int_to_list_pad(L, 0) ->
-    L;
-int_to_list_pad(L, Count) ->
-    int_to_list_pad([$0 | L], Count - 1).
+int_to_list_pad(L, 0) -> L;
+int_to_list_pad(L, Count) -> int_to_list_pad([$0 | L], Count - 1).
 
 int_to_hex_list(L, I, Count, N)
-    when I < 16 ->
-    int_to_list_pad([int_to_hex(I) | L], N - Count);
+  when I < 16 ->
+  int_to_list_pad([int_to_hex(I) | L], N - Count);
 int_to_hex_list(L, I, Count, N) ->
-    int_to_hex_list([int_to_hex(I rem 16) | L], I div 16, Count + 1, N).
+  int_to_hex_list([int_to_hex(I rem 16) | L], I div 16, Count + 1, N).
 
-int_to_dec(I) when 0 =< I, I =< 9 ->
-    I + $0.
+int_to_dec(I) when 0 =< I, I =< 9 -> I + $0.
+int_to_hex(I) when 0 =< I, I =< 9 -> I + $0;
+int_to_hex(I) when 10 =< I, I =< 15 -> (I - 10) + $a.
 
-int_to_hex(I) when 0 =< I, I =< 9 ->
-    I + $0;
-int_to_hex(I) when 10 =< I, I =< 15 ->
-    (I - 10) + $a.
+hex_to_int(C1, C2) -> hex_to_int(C1) * 16 + hex_to_int(C2).
+hex_to_int(C) when $0 =< C, C =< $9 -> C - $0;
+hex_to_int(C) when $A =< C, C =< $F -> C - $A + 10;
+hex_to_int(C) when $a =< C, C =< $f -> C - $a + 10.
 
-hex_to_int(C1, C2) ->
-    hex_to_int(C1) * 16 + hex_to_int(C2).
-
-hex_to_int(C) when $0 =< C, C =< $9 ->
-    C - $0;
-hex_to_int(C) when $A =< C, C =< $F ->
-    C - $A + 10;
-hex_to_int(C) when $a =< C, C =< $f ->
-    C - $a + 10.
-
-mac_address([]) ->
-    [0, 0, 0, 0, 0, 0];
-
+mac_address([]) -> [0, 0, 0, 0, 0, 0];
 mac_address([{_, L} | Rest]) ->
-    case lists:keyfind(hwaddr, 1, L) of
-        false ->
-            mac_address(Rest);
-        {hwaddr, MAC} ->
-            case lists:sum(MAC) of
-                0 ->
-                    mac_address(Rest);
-                _ ->
-                    MAC
-            end
+  case lists:keyfind(hwaddr, 1, L) of
+    false -> mac_address(Rest);
+    {hwaddr, MAC} ->
+      case lists:sum(MAC) of
+        0 -> mac_address(Rest);
+        _ -> MAC
+      end
     end.
-
 
 pseudo_random(N) -> rand:uniform(N).

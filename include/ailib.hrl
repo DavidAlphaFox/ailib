@@ -3,12 +3,3 @@
 -define(UUID_NAMESPACE_OID,  <<16#6ba7b8129dad11d180b400c04fd430c8:128>>).
 -define(UUID_NAMESPACE_X500, <<16#6ba7b8149dad11d180b400c04fd430c8:128>>).
 
- -record(ailib_url,{schema = undefined,
-                 authority = undefined,
-                 host = undefined,
-                 port = undefined,
-                 path = undefined,
-                 qs = undefined,
-                 fragment = undefined}).
-
--type ailib_url() :: #ailib_url{}.
