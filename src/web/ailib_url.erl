@@ -329,7 +329,7 @@ parse_query_name(<< $&, Rest/bits >>, Acc, Name) ->
 		<<>> -> parse_query_name(Rest, Acc, <<>>);
 		_ -> parse_query_name(Rest, [{urldecode(Name), true}|Acc], <<>>)
 	end;
-parse_query_name(<< C, Rest/bits >>, Acc, Name) when C =/= $%, C =/= $= ->
+parse_query_name(<< C, Rest/bits >>, Acc, Name) ->
     parse_query_name(Rest, Acc, << Name/bits, C >>);
 parse_query_name(<<>>, Acc, Name) ->
 	case Name of
