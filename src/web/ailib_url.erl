@@ -19,6 +19,7 @@
 
 -record(url,{scheme = undefined :: binary(),
              authority = undefined ::binary(),
+             userinfo = undefined ::binary(),
              host = undefined ::binary(),
              port = undefined ::binary(),
              path = undefined ::binary(),
@@ -153,41 +154,10 @@ parse(scheme,Bin,Acc)->
         true -> parse(authority,Bin,Acc)
       end
     end;
-parse(authority,<<"//",Bin/bits>>,Acc)->
-  case binary:match(Bin, [<<":">>]) of
-    nomatch ->
-      %% example.com/a
-      %% example.com/
-      %% example.com
-      case binary:match(Bin,[<<"/">>]) of
-        nomatch -> Acc#url{authority = Bin,host = Bin,path = <<"/">>}; %example.com
-        {S1,_L1}->
-          Authority = binary:part(Bin,0,S1),
-          Rest = binary:part(Bin,S1,byte_size(Bin) - S1),
-          parse(path,Rest,Acc#url{authority = Authority,host = Authority})
-      end;
-    {S,L}->
-      case binary:match(Bin,[<<"/">>]) of
-        nomatch ->
-          Pos = S + L,
-          Port = ailib_string:to_integer(
-                   binary:part(Bin,Pos,byte_size(Bin) - Pos)),
-          Host = binary:part(Bin,0,S),
-          Acc#url{authority = Bin,host = Host,port = Port,path = <<"/">>}; %example.com
-        {S2,_L2}->
-          Pos = S + L,
-          Port = ailib_string:to_integer(binary:part(Bin,Pos,S2 - Pos)),
-          Host = binary:part(Bin,0,S),
-          Rest = binary:part(Bin,S2,byte_size(Bin) - S2),
-          parse(path,Rest,Acc#url{authority = <<Host/binary,":",Port/binary>>,host = Host,port = Port})
-      end
-    end;
-%% no scheme here, but can have authority
-parse(authority,Bin,Acc)->
-   case binary:match(Bin,[<<".">>]) of
-     nomatch -> parse(path,Bin,Acc);
-     _ -> parse(authority,<<"//",Bin/binary>>,Acc)
-   end;
+
+parse(authority,<<"//",Bin/bits>>,Acc)-> parse_authority(Bin,<<>>,Acc);
+parse(authority,Bin,Acc)-> parse(path,Bin,Acc);
+
 
 parse(path,Bin,Acc)->
   case binary:match(Bin,[<<"?">>]) of
@@ -226,6 +196,46 @@ parse(qs,Bin,Acc)->
 parse(fragment,Bin,Acc)->
   QS = parse_query(Bin),
   Acc#url{fragment = QS}.
+
+parse_authority(Bin,Acc,URL)->
+  parse_authority(false,Bin,Acc,URL).
+parse_authority(true,<<>>,Acc,URL)->
+  URL0 = split_userinfo(Acc,URL),
+  URL0#url{path = <<"/">>};
+parse_authority(true,<<$/,_/binary>> = Bin,Acc,URL) ->
+  URL0 = split_userinfo(Acc,URL),
+  parse(path,Bin,URL0);
+parse_authority(true,<<$?,Rest/binary>>,Acc,URL)->
+  URL0 = split_userinfo(Acc,URL),
+  parse(qs,Rest,URL0#url{path = <<"/">>});
+parse_authority(true,<<$#,Rest/binary>>,Acc,URL) ->
+  URL0 = split_userinfo(Acc,URL),
+  parse(fragment,Rest,URL0#url{path = <<"/">>});
+parse_authority(_,<<$.,Rest/binary>>,Acc,URL) ->
+  parse_authority(true,Rest,<<Acc/binary,$.>>,URL);
+parse_authority(SeenDot,<<C,Rest/binary>>,Acc,URL) ->
+  parse_authority(SeenDot,Rest,<<Acc/binary,C>>,URL).
+
+split_userinfo(Bin,URL)->
+  case binary:match(Bin,[<<"@">>]) of
+    nomatch -> split_host_port(Bin,URL);
+    {S,L} ->
+      Pos = S + L,
+      UserInfo = binary:part(Bin,0,S),
+      Rest =   binary:part(Bin,Pos,byte_size(Bin) - Pos),
+      split_host_port(Rest,URL#url{userinfo = UserInfo})
+  end.
+
+split_host_port(Bin,URL)->
+  case binary:match(Bin,[<<":">>]) of
+    nomatch -> URL#url{authority = Bin,host = Bin};
+    {S1,L1} ->
+      Pos1 = S1 + L1,
+      Port = ailib_string:to_integer(
+               binary:part(Bin,Pos1,byte_size(Bin) - Pos1)),
+      Host = binary:part(Bin,0,S1),
+      URL#url{authority = Bin,host = Host,port = Port}
+  end.
 
 -spec build(state())->binary().
 build(Record)-> build(scheme,Record,<<>>).
@@ -336,24 +346,16 @@ parse_query_value(<< C, Rest/bits >>, Acc, Name, Value) when C =/= $% ->
 parse_query_value(<<>>, Acc, Name, Value) ->
 	lists:reverse(add_query_param(Name, urldecode(Value),Acc)).
 
-add_query_param(Name,Value,[{Name0,VS}|Acc0] = Acc)->
+add_query_param(Name,Value,[{Name0,VS}|Acc0] = Acc)
+  when erlang:byte_size(Name) > 2 ->
   NameSize = erlang:byte_size(Name) - 2,
-  if NameSize > 2 ->
-      <<Name1:NameSize/binary,Rest>> = Name,
-      case Rest of
-        ?BRACKET ->
-          if Name1 == Name0 -> [{Name0,VS ++ [Value]}| Acc0];
-             true -> [{Name1, [Value]}| Acc]
-          end;
-        _ ->
-          if Name == Name0 ->
-              if erlang:is_list(VS) -> [{Name,VS ++ [Value]}| Acc0];
-                 true -> [{Name,[VS,Value]}| Acc0]
-              end;
-             true -> [{Name,Value}|Acc]
-          end
+  <<Name1:NameSize/binary,Rest/binary>> = Name,
+  case Rest of
+    ?BRACKET ->
+      if Name1 == Name0 -> [{Name0,VS ++ [Value]}| Acc0];
+         true -> [{Name1, [Value]}| Acc]
       end;
-     true ->
+    _ ->
       if Name == Name0 ->
           if erlang:is_list(VS) -> [{Name,VS ++ [Value]}| Acc0];
              true -> [{Name,[VS,Value]}| Acc0]
@@ -361,16 +363,24 @@ add_query_param(Name,Value,[{Name0,VS}|Acc0] = Acc)->
          true -> [{Name,Value}|Acc]
       end
   end;
-add_query_param(Name,Value,[]) ->
+
+add_query_param(Name,Value,[])
+  when erlang:byte_size(Name) > 2 ->
   NameSize = erlang:byte_size(Name) - 2,
-  if NameSize > 2 ->
-      <<Name1:NameSize/binary,Rest>> = Name,
-      case Rest of
-        ?BRACKET -> [{Name1,[Value]}];
-        _ -> [{Name,Value}]
+  <<Name1:NameSize/binary,Rest/binary>> = Name,
+  case Rest of
+    ?BRACKET -> [{Name1,[Value]}];
+    _ -> [{Name,Value}]
+  end;
+
+add_query_param(Name,Value,[{Name0,VS}|Acc0] = Acc)->
+  if Name == Name0 ->
+      if erlang:is_list(VS) -> [{Name,VS ++ [Value]}| Acc0];
+         true -> [{Name,[VS,Value]}| Acc0]
       end;
-     true -> [{Name,Value}]
-  end.
+     true -> [{Name,Value}|Acc]
+  end;
+add_query_param(Name,Value,[]) -> [{Name,Value}].
 
 
 %% @doc Percent encode a string. (RFC3986 2.1)
