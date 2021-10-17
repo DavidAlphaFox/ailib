@@ -1,4 +1,17 @@
 -module(ailib_atom).
+-export([suffix/3,
+         prefix/3,
+         suffix/2,
+         prefix/2]).
+
+-spec suffix(Name:: string()|binary()|atom(),
+             Suffix:: string()|binary()|atom()) -> atom().
+suffix(Name,Suffix)-> suffix(Name,Suffix,false).
+
+
+-spec prefix(Name:: string()|binary()|atom(),
+             Prefix:: string()|binary()|atom()) -> atom().
+prefix(Name,Prefix)-> prefix(Name,Prefix,false).
 
 -spec suffix(Name :: string() | binary() | atom(),
              Suffix :: string() | binary() | atom(),

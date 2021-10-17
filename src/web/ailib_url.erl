@@ -1,12 +1,23 @@
 -module(ailib_url).
 
--export([new/0,new/1]).
--export([parse/1,build/1]).
--export([parse_query/1,build_query/1]).
--export([urlencode/1,urldecode/1]).
+-export([new/0,
+         new/1,
+         urlencode/1,
+         urldecode/1,
+         parse/1,
+         build/1,
+         parse_query/1,
+         build_query/1,
+         scheme/1,
+         scheme/2,
+         authority/1,
+         authority/2,
+         host/1,
+         host/2,
+         port/1,
+         port/2]).
 
-
--record(url,{schema = undefined :: binary(),
+-record(url,{scheme = undefined :: binary(),
              authority = undefined ::binary(),
              host = undefined ::binary(),
              port = undefined ::binary(),
@@ -66,29 +77,79 @@ new()-> #ailib_url_state{}.
 -spec new(fun()) -> state().
 new(ArrayFun)-> #ailib_url_state{array_fun = ArrayFun}.
 
+-spec scheme(state()) -> binary().
+scheme(#ailib_url_state{url = URL}) -> URL#url.scheme.
+
+-spec scheme(binary(),state()) -> state().
+scheme(Scheme,#ailib_url_state{url = URL} = S) ->
+  S#ailib_url_state{url = URL#url{scheme = Scheme}}.
+
+-spec authority(state()) -> binary().
+authority(#ailib_url_state{url = URL}) -> URL#url.authority.
+
+-spec authority(binary(),state()) -> state().
+authority(Authority,#ailib_url_state{url = URL} = S) ->
+  case binary:match(Authority, [<<":">>]) of
+    nomatch ->
+      S#ailib_url_state{
+        url = URL#url{scheme = Authority,port = udefined, host = Authority}};
+    {S,L} ->
+      Pos = S + L,
+      Port = ailib_string:to_integer(
+               binary:part(Authority,Pos,byte_size(Authority) - Pos)),
+      Host = binary:part(Authority,0,S),
+      S#ailib_url_state{
+        url = URL#url{authority = Authority,host = Host,port = Port}}
+  end.
+
+-spec host(state())->binary().
+host(#ailib_url_state{url = URL}) -> URL#url.host.
+
+-spec host(binary(),state())-> state().
+host(Host,#ailib_url_state{url = URL} = S)->
+  Authority = build_authority(Host,URL#url.port),
+  S#ailib_url_state{url = URL#url{authority = Authority,host = Host}}.
+
+-spec port(state())->binary().
+port(#ailib_url_state{url = URL}) -> URL#url.port.
+
+-spec port(binary(),state())-> state().
+port(Port,#ailib_url_state{url = URL} = S)->
+  Authority = build_authority(URL#url.host,Port),
+  S#ailib_url_state{url = URL#url{authority = Authority,port = Port}}.
+
+build_authority(undefined,undefined) -> undefined;
+build_authority(Host,undefined) -> Host;
+build_authority(undefined,Port)->
+  BPort = ailib_string:to_binary(Port),
+  <<$:,BPort/binary>>;
+build_authority(Host,Port) ->
+  BPort = ailib_string:to_binary(Port),
+  <<Host/binary,$:,BPort/binary>>.
+
 -spec parse(binary()|list()) -> state().
 parse(U)-> parse(U,#ailib_url_state{}).
 
 -spec parse(binary()|list(),state()) -> state().
 parse(U,S)->
   UBinary = ailib_string:to_binary(U),
-  URL = parse(schema,UBinary,S#ailib_url_state.url),
+  URL = parse(scheme,UBinary,S#ailib_url_state.url),
   S#ailib_url_state{url = URL}.
 
 -spec parse(atom(),binary(),state()) -> state().
-parse(schema,Bin,Acc)->
+parse(scheme,Bin,Acc)->
   case binary:match(Bin, [<<":">>]) of
     nomatch -> parse(authority,Bin,Acc);
     {S,L}->
       %% maybe this example.com:3333/over/there?name=ferret#nose
-      MaybeSchema = binary:part(Bin, 0, S),
+      MaybeScheme = binary:part(Bin, 0, S),
       Pos = S + L, %%binary的切开点，Pos是未匹配字串的第一个字符
       DoubleSlash = binary:at(Bin,Pos) =:= $/ 
         andalso binary:at(Bin,Pos + 1) =:= $/,
       if
         DoubleSlash == true ->
           Rest  = binary:part(Bin, Pos, byte_size(Bin) - Pos),
-          parse(authority,Rest,Acc#url{schema = MaybeSchema});
+          parse(authority,Rest,Acc#url{scheme = MaybeScheme});
         true -> parse(authority,Bin,Acc)
       end
     end;
@@ -109,18 +170,19 @@ parse(authority,<<"//",Bin/bits>>,Acc)->
       case binary:match(Bin,[<<"/">>]) of
         nomatch ->
           Pos = S + L,
-          Port = binary:part(Bin,Pos,byte_size(Bin) - Pos),
+          Port = ailib_string:to_integer(
+                   binary:part(Bin,Pos,byte_size(Bin) - Pos)),
           Host = binary:part(Bin,0,S),
           Acc#url{authority = Bin,host = Host,port = Port,path = <<"/">>}; %example.com
         {S2,_L2}->
           Pos = S + L,
-          Port = binary:part(Bin,Pos,S2 - Pos),
+          Port = ailib_string:to_integer(binary:part(Bin,Pos,S2 - Pos)),
           Host = binary:part(Bin,0,S),
           Rest = binary:part(Bin,S2,byte_size(Bin) - S2),
           parse(path,Rest,Acc#url{authority = <<Host/binary,":",Port/binary>>,host = Host,port = Port})
       end
     end;
-%% no schema here, but can have authority
+%% no scheme here, but can have authority
 parse(authority,Bin,Acc)->
    case binary:match(Bin,[<<".">>]) of
      nomatch -> parse(path,Bin,Acc);
@@ -165,14 +227,14 @@ parse(fragment,Bin,Acc)->
   QS = parse_query(Bin),
   Acc#url{fragment = QS}.
 
-
-build(Record)-> build(schema,Record,<<>>).
-build(schema,#ailib_url_state{url = URL} = Record,Acc)->
-  case URL#url.schema of
+-spec build(state())->binary().
+build(Record)-> build(scheme,Record,<<>>).
+build(scheme,#ailib_url_state{url = URL} = Record,Acc)->
+  case URL#url.scheme of
     undefined -> build(authority,Record,Acc);
-    Schema ->
-      SchemaBin = ailib_string:to_binary(Schema),
-      build(authority,Record,<<Acc/binary,SchemaBin/binary,"://">>)
+    Scheme ->
+      SchemeBin = ailib_string:to_binary(Scheme),
+      build(authority,Record,<<Acc/binary,SchemeBin/binary,"://">>)
   end;
 build(authority,#ailib_url_state{url = URL} = Record,Acc)->
   case { URL#url.authority,URL#url.host} of
@@ -275,21 +337,41 @@ parse_query_value(<<>>, Acc, Name, Value) ->
 	lists:reverse(add_query_param(Name, urldecode(Value),Acc)).
 
 add_query_param(Name,Value,[{Name0,VS}|Acc0] = Acc)->
-  NameSize = erlang:byteSize(Name) - 2,
-  <<Name1:NameSize/binary,Rest>> = Name,
-  case Rest of
-    ?BRACKET ->
-      if Name1 == Name0 -> [{Name0,VS ++ [Value]}| Acc0];
-         true -> [{Name1, [Value]}| Acc]
+  NameSize = erlang:byte_size(Name) - 2,
+  if NameSize > 2 ->
+      <<Name1:NameSize/binary,Rest>> = Name,
+      case Rest of
+        ?BRACKET ->
+          if Name1 == Name0 -> [{Name0,VS ++ [Value]}| Acc0];
+             true -> [{Name1, [Value]}| Acc]
+          end;
+        _ ->
+          if Name == Name0 ->
+              if erlang:is_list(VS) -> [{Name,VS ++ [Value]}| Acc0];
+                 true -> [{Name,[VS,Value]}| Acc0]
+              end;
+             true -> [{Name,Value}|Acc]
+          end
       end;
-    _ ->
+     true ->
       if Name == Name0 ->
           if erlang:is_list(VS) -> [{Name,VS ++ [Value]}| Acc0];
              true -> [{Name,[VS,Value]}| Acc0]
           end;
          true -> [{Name,Value}|Acc]
       end
+  end;
+add_query_param(Name,Value,[]) ->
+  NameSize = erlang:byte_size(Name) - 2,
+  if NameSize > 2 ->
+      <<Name1:NameSize/binary,Rest>> = Name,
+      case Rest of
+        ?BRACKET -> [{Name1,[Value]}];
+        _ -> [{Name,Value}]
+      end;
+     true -> [{Name,Value}]
   end.
+
 
 %% @doc Percent encode a string. (RFC3986 2.1)
 -spec urlencode(B) -> B when B::binary().
