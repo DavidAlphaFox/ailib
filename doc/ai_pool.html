@@ -1,0 +1,190 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>Module ai_pool</title>
+<link rel="stylesheet" type="text/css" href="stylesheet.css" title="EDoc">
+</head>
+<body bgcolor="white">
+<div class="navbar"><a name="#navbar_top"></a><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"></a></td></tr></table></div>
+<hr>
+
+<h1>Module ai_pool</h1>
+<ul class="index"><li><a href="#types">Data Types</a></li><li><a href="#index">Function Index</a></li><li><a href="#functions">Function Details</a></li></ul>
+
+<p><b>Behaviours:</b> <a href="gen_server.html"><tt>gen_server</tt></a>.</p>
+
+<h2><a name="types">Data Types</a></h2>
+
+<h3 class="typedecl"><a name="type-pool">pool()</a></h3>
+<p><tt>pool() = atom() | pid() | {Name::atom(), node()} | {local, Name::atom()} | {global, GlobalName::any()} | {via, Module::atom(), ViaName::any()}</tt></p>
+
+
+<h3 class="typedecl"><a name="type-start_ret">start_ret()</a></h3>
+<p><tt>start_ret() = {ok, pid()} | ignore | {error, term()}</tt></p>
+
+
+<h2><a name="index">Function Index</a></h2>
+<table width="100%" border="1" cellspacing="0" cellpadding="2" summary="function index"><tr><td valign="top"><a href="#checkin-2">checkin/2</a></td><td></td></tr>
+<tr><td valign="top"><a href="#checkout-1">checkout/1</a></td><td></td></tr>
+<tr><td valign="top"><a href="#checkout-2">checkout/2</a></td><td></td></tr>
+<tr><td valign="top"><a href="#checkout-3">checkout/3</a></td><td></td></tr>
+<tr><td valign="top"><a href="#checkout-3">checkout/3</a></td><td></td></tr>
+<tr><td valign="top"><a href="#code_change-3">code_change/3</a></td><td></td></tr>
+<tr><td valign="top"><a href="#handle_call-3">handle_call/3</a></td><td></td></tr>
+<tr><td valign="top"><a href="#handle_cast-2">handle_cast/2</a></td><td></td></tr>
+<tr><td valign="top"><a href="#handle_info-2">handle_info/2</a></td><td></td></tr>
+<tr><td valign="top"><a href="#init-1">init/1</a></td><td></td></tr>
+<tr><td valign="top"><a href="#pool_spec-2">pool_spec/2</a></td><td></td></tr>
+<tr><td valign="top"><a href="#pool_spec-3">pool_spec/3</a></td><td></td></tr>
+<tr><td valign="top"><a href="#pool_spec-4">pool_spec/4</a></td><td></td></tr>
+<tr><td valign="top"><a href="#start-1">start/1</a></td><td></td></tr>
+<tr><td valign="top"><a href="#start-2">start/2</a></td><td></td></tr>
+<tr><td valign="top"><a href="#start_link-1">start_link/1</a></td><td></td></tr>
+<tr><td valign="top"><a href="#start_link-2">start_link/2</a></td><td></td></tr>
+<tr><td valign="top"><a href="#status-1">status/1</a></td><td></td></tr>
+<tr><td valign="top"><a href="#stop-1">stop/1</a></td><td></td></tr>
+<tr><td valign="top"><a href="#terminate-2">terminate/2</a></td><td></td></tr>
+<tr><td valign="top"><a href="#transaction-2">transaction/2</a></td><td></td></tr>
+<tr><td valign="top"><a href="#transaction-3">transaction/3</a></td><td></td></tr>
+</table>
+
+<h2><a name="functions">Function Details</a></h2>
+
+<h3 class="function"><a name="checkin-2">checkin/2</a></h3>
+<div class="spec">
+<p><tt>checkin(Pool::<a href="#type-pool">pool()</a>, Worker::pid()) -&gt; ok</tt><br></p>
+<p> </p>
+</div>
+
+<h3 class="function"><a name="checkout-1">checkout/1</a></h3>
+<div class="spec">
+<p><tt>checkout(Pool::<a href="#type-pool">pool()</a>) -&gt; pid()</tt><br></p>
+<p> </p>
+</div>
+
+<h3 class="function"><a name="checkout-2">checkout/2</a></h3>
+<div class="spec">
+<p><tt>checkout(Pool::<a href="#type-pool">pool()</a>, Block::boolean()) -&gt; pid() | full</tt><br></p>
+<p> </p>
+</div>
+
+<h3 class="function"><a name="checkout-3">checkout/3</a></h3>
+<div class="spec">
+<p><tt>checkout(Pool::<a href="#type-pool">pool()</a>, Block::boolean(), Timeout::timeout()) -&gt; pid() | full</tt><br></p>
+<p> </p>
+</div>
+
+<h3 class="function"><a name="checkout-3">checkout/3</a></h3>
+<div class="spec">
+<p><tt>checkout(Pool::<a href="#type-pool">pool()</a>, Block::boolean(), Timeout::timeout()) -&gt; pid() | full</tt><br></p>
+<p> </p>
+</div>
+
+<h3 class="function"><a name="code_change-3">code_change/3</a></h3>
+<div class="spec">
+<p><tt>code_change(OldVsn, State, Extra) -&gt; any()</tt></p>
+<p> </p>
+</div>
+
+<h3 class="function"><a name="handle_call-3">handle_call/3</a></h3>
+<div class="spec">
+<p><tt>handle_call(Msg, From, State) -&gt; any()</tt></p>
+<p> </p>
+</div>
+
+<h3 class="function"><a name="handle_cast-2">handle_cast/2</a></h3>
+<div class="spec">
+<p><tt>handle_cast(Msg, State) -&gt; any()</tt></p>
+<p> </p>
+</div>
+
+<h3 class="function"><a name="handle_info-2">handle_info/2</a></h3>
+<div class="spec">
+<p><tt>handle_info(Info, State) -&gt; any()</tt></p>
+<p> </p>
+</div>
+
+<h3 class="function"><a name="init-1">init/1</a></h3>
+<div class="spec">
+<p><tt>init(X1) -&gt; any()</tt></p>
+<p> </p>
+</div>
+
+<h3 class="function"><a name="pool_spec-2">pool_spec/2</a></h3>
+<div class="spec">
+<p><tt>pool_spec(PoolId::term(), PoolArgs::<a href="/Users/david/Documents/workspace/stdlib/doc/proplists.html#type-proplist">proplists:proplist()</a>) -&gt; <a href="/Users/david/Documents/workspace/stdlib/doc/supervisor.html#type-child_spec">supervisor:child_spec()</a></tt><br></p>
+<p> </p>
+</div>
+
+<h3 class="function"><a name="pool_spec-3">pool_spec/3</a></h3>
+<div class="spec">
+<p><tt>pool_spec(PoolId::term(), PoolArgs::<a href="/Users/david/Documents/workspace/stdlib/doc/proplists.html#type-proplist">proplists:proplist()</a>, WorkerArgs::<a href="/Users/david/Documents/workspace/stdlib/doc/proplists.html#type-proplist">proplists:proplist()</a>) -&gt; <a href="/Users/david/Documents/workspace/stdlib/doc/supervisor.html#type-child_spec">supervisor:child_spec()</a></tt><br></p>
+<p> </p>
+</div>
+
+<h3 class="function"><a name="pool_spec-4">pool_spec/4</a></h3>
+<div class="spec">
+<p><tt>pool_spec(PoolId::term(), PoolArgs::<a href="/Users/david/Documents/workspace/stdlib/doc/proplists.html#type-proplist">proplists:proplist()</a>, WorkerArgs::<a href="/Users/david/Documents/workspace/stdlib/doc/proplists.html#type-proplist">proplists:proplist()</a>, ChildSpecFormat::tuple | map) -&gt; <a href="/Users/david/Documents/workspace/stdlib/doc/supervisor.html#type-child_spec">supervisor:child_spec()</a></tt><br></p>
+<p> </p>
+</div>
+
+<h3 class="function"><a name="start-1">start/1</a></h3>
+<div class="spec">
+<p><tt>start(PoolArgs::<a href="/Users/david/Documents/workspace/stdlib/doc/proplists.html#type-proplist">proplists:proplist()</a>) -&gt; <a href="#type-start_ret">start_ret()</a></tt><br></p>
+<p> </p>
+</div>
+
+<h3 class="function"><a name="start-2">start/2</a></h3>
+<div class="spec">
+<p><tt>start(PoolArgs::<a href="/Users/david/Documents/workspace/stdlib/doc/proplists.html#type-proplist">proplists:proplist()</a>, WorkerArgs::<a href="/Users/david/Documents/workspace/stdlib/doc/proplists.html#type-proplist">proplists:proplist()</a>) -&gt; <a href="#type-start_ret">start_ret()</a></tt><br></p>
+<p> </p>
+</div>
+
+<h3 class="function"><a name="start_link-1">start_link/1</a></h3>
+<div class="spec">
+<p><tt>start_link(PoolArgs::<a href="/Users/david/Documents/workspace/stdlib/doc/proplists.html#type-proplist">proplists:proplist()</a>) -&gt; <a href="#type-start_ret">start_ret()</a></tt><br></p>
+<p> </p>
+</div>
+
+<h3 class="function"><a name="start_link-2">start_link/2</a></h3>
+<div class="spec">
+<p><tt>start_link(PoolArgs::<a href="/Users/david/Documents/workspace/stdlib/doc/proplists.html#type-proplist">proplists:proplist()</a>, WorkerArgs::<a href="/Users/david/Documents/workspace/stdlib/doc/proplists.html#type-proplist">proplists:proplist()</a>) -&gt; <a href="#type-start_ret">start_ret()</a></tt><br></p>
+<p> </p>
+</div>
+
+<h3 class="function"><a name="status-1">status/1</a></h3>
+<div class="spec">
+<p><tt>status(Pool::<a href="#type-pool">pool()</a>) -&gt; {atom(), integer(), integer(), integer()}</tt><br></p>
+<p> </p>
+</div>
+
+<h3 class="function"><a name="stop-1">stop/1</a></h3>
+<div class="spec">
+<p><tt>stop(Pool::<a href="#type-pool">pool()</a>) -&gt; ok</tt><br></p>
+<p> </p>
+</div>
+
+<h3 class="function"><a name="terminate-2">terminate/2</a></h3>
+<div class="spec">
+<p><tt>terminate(Reason, State) -&gt; any()</tt></p>
+<p> </p>
+</div>
+
+<h3 class="function"><a name="transaction-2">transaction/2</a></h3>
+<div class="spec">
+<p><tt>transaction(Pool::<a href="#type-pool">pool()</a>, Fun::fun((Worker::pid()) -&gt; any())) -&gt; any()</tt><br></p>
+<p> </p>
+</div>
+
+<h3 class="function"><a name="transaction-3">transaction/3</a></h3>
+<div class="spec">
+<p><tt>transaction(Pool::<a href="#type-pool">pool()</a>, Fun::fun((Worker::pid()) -&gt; any()), Timeout::timeout()) -&gt; any()</tt><br></p>
+<p> </p>
+</div>
+<hr>
+
+<div class="navbar"><a name="#navbar_bottom"></a><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"></a></td></tr></table></div>
+<p><i>Generated by EDoc</i></p>
+</body>
+</html>

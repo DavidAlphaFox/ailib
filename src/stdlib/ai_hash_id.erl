@@ -38,13 +38,11 @@
 -define(DEFAULT_SEPS,         "cfhistuCFHISTU").
 
 %% @doc make a new hashids context (convenient function)
-%% @spec new() -> ai_hash_id()
 -spec new() -> ai_hash_id().
 new() ->
     new([]).
 
 %% @doc make a new hashids context
-%% @spec new([] | [{salt | default_alphabet | min_hash_length, any()}]) -> ai_hash_id()
 -spec new([] | [{salt | default_alphabet | min_hash_length, any()}]) -> ai_hash_id().
 new(Opts) ->
     Salt            = get_value(salt, Opts, []),

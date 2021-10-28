@@ -1,0 +1,271 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>Module ai_pt</title>
+<link rel="stylesheet" type="text/css" href="stylesheet.css" title="EDoc">
+</head>
+<body bgcolor="white">
+<div class="navbar"><a name="#navbar_top"></a><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"></a></td></tr></table></div>
+<hr>
+
+<h1>Module ai_pt</h1>
+<ul class="index"><li><a href="#types">Data Types</a></li><li><a href="#index">Function Index</a></li><li><a href="#functions">Function Details</a></li></ul>
+
+
+<h2><a name="types">Data Types</a></h2>
+
+<h3 class="typedecl"><a name="type-ast">ast()</a></h3>
+<p><tt>ast() = tuple() | [<a href="#type-ast">ast()</a>]</tt></p>
+
+
+<h2><a name="index">Function Index</a></h2>
+<table width="100%" border="1" cellspacing="0" cellpadding="2" summary="function index"><tr><td valign="top"><a href="#build_and_guard-2">build_and_guard/2</a></td><td></td></tr>
+<tr><td valign="top"><a href="#build_atom-1">build_atom/1</a></td><td></td></tr>
+<tr><td valign="top"><a href="#build_attribute-2">build_attribute/2</a></td><td></td></tr>
+<tr><td valign="top"><a href="#build_binary-1">build_binary/1</a></td><td>
+  ASTify a bin.</td></tr>
+<tr><td valign="top"><a href="#build_boolean-1">build_boolean/1</a></td><td>
+  ASTify a boolean.</td></tr>
+<tr><td valign="top"><a href="#build_call-2">build_call/2</a></td><td></td></tr>
+<tr><td valign="top"><a href="#build_call-3">build_call/3</a></td><td></td></tr>
+<tr><td valign="top"><a href="#build_case-2">build_case/2</a></td><td></td></tr>
+<tr><td valign="top"><a href="#build_clause-2">build_clause/2</a></td><td></td></tr>
+<tr><td valign="top"><a href="#build_clause-3">build_clause/3</a></td><td></td></tr>
+<tr><td valign="top"><a href="#build_float-1">build_float/1</a></td><td>
+  ASTify a float.</td></tr>
+<tr><td valign="top"><a href="#build_fun-1">build_fun/1</a></td><td></td></tr>
+<tr><td valign="top"><a href="#build_function-3">build_function/3</a></td><td></td></tr>
+<tr><td valign="top"><a href="#build_get_record_field-3">build_get_record_field/3</a></td><td></td></tr>
+<tr><td valign="top"><a href="#build_guard-1">build_guard/1</a></td><td></td></tr>
+<tr><td valign="top"><a href="#build_if-1">build_if/1</a></td><td></td></tr>
+<tr><td valign="top"><a href="#build_integer-1">build_integer/1</a></td><td>
+  ASTify an integer.</td></tr>
+<tr><td valign="top"><a href="#build_lc-2">build_lc/2</a></td><td></td></tr>
+<tr><td valign="top"><a href="#build_lc_generate-2">build_lc_generate/2</a></td><td></td></tr>
+<tr><td valign="top"><a href="#build_list-1">build_list/1</a></td><td>
+   ASTify a list.</td></tr>
+<tr><td valign="top"><a href="#build_match-2">build_match/2</a></td><td></td></tr>
+<tr><td valign="top"><a href="#build_op-3">build_op/3</a></td><td></td></tr>
+<tr><td valign="top"><a href="#build_or_guard-2">build_or_guard/2</a></td><td></td></tr>
+<tr><td valign="top"><a href="#build_record-1">build_record/1</a></td><td></td></tr>
+<tr><td valign="top"><a href="#build_record-2">build_record/2</a></td><td></td></tr>
+<tr><td valign="top"><a href="#build_record-3">build_record/3</a></td><td></td></tr>
+<tr><td valign="top"><a href="#build_record_field-1">build_record_field/1</a></td><td></td></tr>
+<tr><td valign="top"><a href="#build_record_field-2">build_record_field/2</a></td><td></td></tr>
+<tr><td valign="top"><a href="#build_string-1">build_string/1</a></td><td>
+  ASTify a string.</td></tr>
+<tr><td valign="top"><a href="#build_tuple-1">build_tuple/1</a></td><td>
+  ASTify a tuple.</td></tr>
+<tr><td valign="top"><a href="#build_value-1">build_value/1</a></td><td>
+   ASTify the given value.</td></tr>
+<tr><td valign="top"><a href="#build_var-1">build_var/1</a></td><td></td></tr>
+</table>
+
+<h2><a name="functions">Function Details</a></h2>
+
+<h3 class="function"><a name="build_and_guard-2">build_and_guard/2</a></h3>
+<div class="spec">
+<p><tt>build_and_guard(Ast1::<a href="#type-ast">ast()</a>, Ast2::<a href="#type-ast">ast()</a>) -&gt; <a href="#type-ast">ast()</a></tt><br></p>
+<p> </p>
+</div>
+
+<h3 class="function"><a name="build_atom-1">build_atom/1</a></h3>
+<div class="spec">
+<p><tt>build_atom(A::atom()) -&gt; <a href="#type-ast">ast()</a></tt><br></p>
+<p> </p>
+</div>
+
+<h3 class="function"><a name="build_attribute-2">build_attribute/2</a></h3>
+<div class="spec">
+<p><tt>build_attribute(Attribute::atom(), AST::<a href="#type-ast">ast()</a>) -&gt; <a href="#type-ast">ast()</a></tt><br></p>
+<p> </p>
+</div>
+
+<h3 class="function"><a name="build_binary-1">build_binary/1</a></h3>
+<div class="spec">
+<p><tt>build_binary(S) -&gt; any()</tt></p>
+<p> </p>
+</div><p>
+  ASTify a bin</p>
+
+<h3 class="function"><a name="build_boolean-1">build_boolean/1</a></h3>
+<div class="spec">
+<p><tt>build_boolean(B) -&gt; any()</tt></p>
+<p> </p>
+</div><p>
+  ASTify a boolean</p>
+
+<h3 class="function"><a name="build_call-2">build_call/2</a></h3>
+<div class="spec">
+<p><tt>build_call(Function::atom(), Parameters::<a href="#type-ast">ast()</a>) -&gt; <a href="#type-ast">ast()</a></tt><br></p>
+<p> </p>
+</div>
+
+<h3 class="function"><a name="build_call-3">build_call/3</a></h3>
+<div class="spec">
+<p><tt>build_call(Module::atom() | <a href="#type-ast">ast()</a>, Function::atom() | <a href="#type-ast">ast()</a>, Parameters::<a href="#type-ast">ast()</a>) -&gt; <a href="#type-ast">ast()</a></tt><br></p>
+<p> </p>
+</div>
+
+<h3 class="function"><a name="build_case-2">build_case/2</a></h3>
+<div class="spec">
+<p><tt>build_case(Exp::<a href="#type-ast">ast()</a>, Clauses::<a href="#type-ast">ast()</a>) -&gt; <a href="#type-ast">ast()</a></tt><br></p>
+<p> </p>
+</div>
+
+<h3 class="function"><a name="build_clause-2">build_clause/2</a></h3>
+<div class="spec">
+<p><tt>build_clause(Vars::<a href="#type-ast">ast()</a>, Body::<a href="#type-ast">ast()</a>) -&gt; <a href="#type-ast">ast()</a></tt><br></p>
+<p> </p>
+</div>
+
+<h3 class="function"><a name="build_clause-3">build_clause/3</a></h3>
+<div class="spec">
+<p><tt>build_clause(Vars::<a href="#type-ast">ast()</a>, Guards::<a href="#type-ast">ast()</a>, Body::<a href="#type-ast">ast()</a>) -&gt; <a href="#type-ast">ast()</a></tt><br></p>
+<p> </p>
+</div>
+
+<h3 class="function"><a name="build_float-1">build_float/1</a></h3>
+<div class="spec">
+<p><tt>build_float(F::float()) -&gt; <a href="#type-ast">ast()</a></tt><br></p>
+<p> </p>
+</div><p>
+  ASTify a float</p>
+
+<h3 class="function"><a name="build_fun-1">build_fun/1</a></h3>
+<div class="spec">
+<p><tt>build_fun(Clauses) -&gt; any()</tt></p>
+<p> </p>
+</div>
+
+<h3 class="function"><a name="build_function-3">build_function/3</a></h3>
+<div class="spec">
+<p><tt>build_function(Name::atom(), Arity::integer(), Clauses::<a href="#type-ast">ast()</a>) -&gt; <a href="#type-ast">ast()</a></tt><br></p>
+<p> </p>
+</div>
+
+<h3 class="function"><a name="build_get_record_field-3">build_get_record_field/3</a></h3>
+<div class="spec">
+<p><tt>build_get_record_field(RecordVar::atom() | <a href="#type-ast">ast()</a>, RecordName::atom(), Field::atom()) -&gt; <a href="#type-ast">ast()</a></tt><br></p>
+<p> </p>
+</div>
+
+<h3 class="function"><a name="build_guard-1">build_guard/1</a></h3>
+<div class="spec">
+<p><tt>build_guard(Ast::<a href="#type-ast">ast()</a>) -&gt; <a href="#type-ast">ast()</a></tt><br></p>
+<p> </p>
+</div>
+
+<h3 class="function"><a name="build_if-1">build_if/1</a></h3>
+<div class="spec">
+<p><tt>build_if(Clauses::<a href="#type-ast">ast()</a>) -&gt; <a href="#type-ast">ast()</a></tt><br></p>
+<p> </p>
+</div>
+
+<h3 class="function"><a name="build_integer-1">build_integer/1</a></h3>
+<div class="spec">
+<p><tt>build_integer(I::integer()) -&gt; <a href="#type-ast">ast()</a></tt><br></p>
+<p> </p>
+</div><p>
+  ASTify an integer</p>
+
+<h3 class="function"><a name="build_lc-2">build_lc/2</a></h3>
+<div class="spec">
+<p><tt>build_lc(Var, Generates) -&gt; any()</tt></p>
+<p> </p>
+</div>
+
+<h3 class="function"><a name="build_lc_generate-2">build_lc_generate/2</a></h3>
+<div class="spec">
+<p><tt>build_lc_generate(Var, List) -&gt; any()</tt></p>
+<p> </p>
+</div>
+
+<h3 class="function"><a name="build_list-1">build_list/1</a></h3>
+<div class="spec">
+<p><tt>build_list(L::list()) -&gt; <a href="#type-ast">ast()</a></tt><br></p>
+<p> </p>
+</div><p>
+   ASTify a list</p>
+
+<h3 class="function"><a name="build_match-2">build_match/2</a></h3>
+<div class="spec">
+<p><tt>build_match(A::<a href="#type-ast">ast()</a>, B::<a href="#type-ast">ast()</a>) -&gt; <a href="#type-ast">ast()</a></tt><br></p>
+<p> </p>
+</div>
+
+<h3 class="function"><a name="build_op-3">build_op/3</a></h3>
+<div class="spec">
+<p><tt>build_op(Op::atom(), A::<a href="#type-ast">ast()</a>, B::<a href="#type-ast">ast()</a>) -&gt; <a href="#type-ast">ast()</a></tt><br></p>
+<p> </p>
+</div>
+
+<h3 class="function"><a name="build_or_guard-2">build_or_guard/2</a></h3>
+<div class="spec">
+<p><tt>build_or_guard(Ast1::<a href="#type-ast">ast()</a>, Ast2::<a href="#type-ast">ast()</a>) -&gt; <a href="#type-ast">ast()</a></tt><br></p>
+<p> </p>
+</div>
+
+<h3 class="function"><a name="build_record-1">build_record/1</a></h3>
+<div class="spec">
+<p><tt>build_record(Name) -&gt; any()</tt></p>
+<p> </p>
+</div>
+
+<h3 class="function"><a name="build_record-2">build_record/2</a></h3>
+<div class="spec">
+<p><tt>build_record(Name, Fields) -&gt; any()</tt></p>
+<p> </p>
+</div>
+
+<h3 class="function"><a name="build_record-3">build_record/3</a></h3>
+<div class="spec">
+<p><tt>build_record(Record, Name, Fields) -&gt; any()</tt></p>
+<p> </p>
+</div>
+
+<h3 class="function"><a name="build_record_field-1">build_record_field/1</a></h3>
+<div class="spec">
+<p><tt>build_record_field(Field::atom()) -&gt; <a href="#type-ast">ast()</a></tt><br></p>
+<p> </p>
+</div>
+
+<h3 class="function"><a name="build_record_field-2">build_record_field/2</a></h3>
+<div class="spec">
+<p><tt>build_record_field(Field::atom(), Value::<a href="#type-ast">ast()</a>) -&gt; <a href="#type-ast">ast()</a></tt><br></p>
+<p> </p>
+</div>
+
+<h3 class="function"><a name="build_string-1">build_string/1</a></h3>
+<div class="spec">
+<p><tt>build_string(S::string()) -&gt; <a href="#type-ast">ast()</a></tt><br></p>
+<p> </p>
+</div><p>
+  ASTify a string</p>
+
+<h3 class="function"><a name="build_tuple-1">build_tuple/1</a></h3>
+<div class="spec">
+<p><tt>build_tuple(T::tuple()) -&gt; <a href="#type-ast">ast()</a></tt><br></p>
+<p> </p>
+</div><p>
+  ASTify a tuple</p>
+
+<h3 class="function"><a name="build_value-1">build_value/1</a></h3>
+<div class="spec">
+<p><tt>build_value(X) -&gt; any()</tt></p>
+<p> </p>
+</div><p>
+   ASTify the given value</p>
+
+<h3 class="function"><a name="build_var-1">build_var/1</a></h3>
+<div class="spec">
+<p><tt>build_var(A::atom()) -&gt; <a href="#type-ast">ast()</a></tt><br></p>
+<p> </p>
+</div>
+<hr>
+
+<div class="navbar"><a name="#navbar_bottom"></a><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"></a></td></tr></table></div>
+<p><i>Generated by EDoc</i></p>
+</body>
+</html>

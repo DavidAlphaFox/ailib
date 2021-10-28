@@ -1,0 +1,115 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>Module ai_hash_id</title>
+<link rel="stylesheet" type="text/css" href="stylesheet.css" title="EDoc">
+</head>
+<body bgcolor="white">
+<div class="navbar"><a name="#navbar_top"></a><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"></a></td></tr></table></div>
+<hr>
+
+<h1>Module ai_hash_id</h1>
+<ul class="index"><li><a href="#types">Data Types</a></li><li><a href="#index">Function Index</a></li><li><a href="#functions">Function Details</a></li></ul>
+
+
+<h2><a name="types">Data Types</a></h2>
+
+<h3 class="typedecl"><a name="type-ai_hash_id">ai_hash_id()</a></h3>
+<p><tt>ai_hash_id() = #ai_hash_id{salt = list(), min_length = non_neg_integer(), alphabet = list(), seperators = list(), guards = list()}</tt></p>
+
+
+<h2><a name="index">Function Index</a></h2>
+<table width="100%" border="1" cellspacing="0" cellpadding="2" summary="function index"><tr><td valign="top"><a href="#alphabet-1">alphabet/1</a></td><td>returns adjusted custom alphabet from context.</td></tr>
+<tr><td valign="top"><a href="#consistent_shuffle-2">consistent_shuffle/2</a></td><td></td></tr>
+<tr><td valign="top"><a href="#decode-2">decode/2</a></td><td>decode hash string.</td></tr>
+<tr><td valign="top"><a href="#decode_hex-2">decode_hex/2</a></td><td>decode hash string to decoded hex string.</td></tr>
+<tr><td valign="top"><a href="#encode-2">encode/2</a></td><td>encode numbers.</td></tr>
+<tr><td valign="top"><a href="#encode_hex-2">encode_hex/2</a></td><td>encode hex string.</td></tr>
+<tr><td valign="top"><a href="#hash-2">hash/2</a></td><td></td></tr>
+<tr><td valign="top"><a href="#min_hash_length-1">min_hash_length/1</a></td><td>returns minimum hash length from context.</td></tr>
+<tr><td valign="top"><a href="#new-0">new/0</a></td><td>make a new hashids context (convenient function).</td></tr>
+<tr><td valign="top"><a href="#new-1">new/1</a></td><td>make a new hashids context.</td></tr>
+<tr><td valign="top"><a href="#salt-1">salt/1</a></td><td>returns salt from context.</td></tr>
+<tr><td valign="top"><a href="#unhash-2">unhash/2</a></td><td></td></tr>
+</table>
+
+<h2><a name="functions">Function Details</a></h2>
+
+<h3 class="function"><a name="alphabet-1">alphabet/1</a></h3>
+<div class="spec">
+<p><tt>alphabet(Context::<a href="#type-ai_hash_id">ai_hash_id()</a>) -&gt; string()</tt><br></p>
+<p> </p>
+</div><p>returns adjusted custom alphabet from context</p>
+
+<h3 class="function"><a name="consistent_shuffle-2">consistent_shuffle/2</a></h3>
+<div class="spec">
+<p><tt>consistent_shuffle(Alphabet, Salt) -&gt; any()</tt></p>
+<p> </p>
+</div>
+
+<h3 class="function"><a name="decode-2">decode/2</a></h3>
+<div class="spec">
+<p><tt>decode(Context::<a href="#type-ai_hash_id">ai_hash_id()</a>, HashStr::string()) -&gt; [integer(), ...]</tt><br></p>
+<p> </p>
+</div><p>decode hash string</p>
+
+<h3 class="function"><a name="decode_hex-2">decode_hex/2</a></h3>
+<div class="spec">
+<p><tt>decode_hex(Context::<a href="#type-ai_hash_id">ai_hash_id()</a>, HashStr::string()) -&gt; string()</tt><br></p>
+<p> </p>
+</div><p>decode hash string to decoded hex string</p>
+
+<h3 class="function"><a name="encode-2">encode/2</a></h3>
+<div class="spec">
+<p><tt>encode(Context::<a href="#type-ai_hash_id">ai_hash_id()</a>, N::integer() | [integer(), ...]) -&gt; string()</tt><br></p>
+<p> </p>
+</div><p>encode numbers</p>
+
+<h3 class="function"><a name="encode_hex-2">encode_hex/2</a></h3>
+<div class="spec">
+<p><tt>encode_hex(Context::<a href="#type-ai_hash_id">ai_hash_id()</a>, Str::string()) -&gt; string()</tt><br></p>
+<p> </p>
+</div><p>encode hex string</p>
+
+<h3 class="function"><a name="hash-2">hash/2</a></h3>
+<div class="spec">
+<p><tt>hash(Input, Alphabet) -&gt; any()</tt></p>
+<p> </p>
+</div>
+
+<h3 class="function"><a name="min_hash_length-1">min_hash_length/1</a></h3>
+<div class="spec">
+<p><tt>min_hash_length(Context::<a href="#type-ai_hash_id">ai_hash_id()</a>) -&gt; non_neg_integer()</tt><br></p>
+<p> </p>
+</div><p>returns minimum hash length from context</p>
+
+<h3 class="function"><a name="new-0">new/0</a></h3>
+<div class="spec">
+<p><tt>new() -&gt; <a href="#type-ai_hash_id">ai_hash_id()</a></tt><br></p>
+<p> </p>
+</div><p>make a new hashids context (convenient function)</p>
+
+<h3 class="function"><a name="new-1">new/1</a></h3>
+<div class="spec">
+<p><tt>new(Opts::[] | [{salt | default_alphabet | min_hash_length, any()}]) -&gt; <a href="#type-ai_hash_id">ai_hash_id()</a></tt><br></p>
+<p> </p>
+</div><p>make a new hashids context</p>
+
+<h3 class="function"><a name="salt-1">salt/1</a></h3>
+<div class="spec">
+<p><tt>salt(Context::<a href="#type-ai_hash_id">ai_hash_id()</a>) -&gt; string()</tt><br></p>
+<p> </p>
+</div><p>returns salt from context</p>
+
+<h3 class="function"><a name="unhash-2">unhash/2</a></h3>
+<div class="spec">
+<p><tt>unhash(Input, Alphabet) -&gt; any()</tt></p>
+<p> </p>
+</div>
+<hr>
+
+<div class="navbar"><a name="#navbar_bottom"></a><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"></a></td></tr></table></div>
+<p><i>Generated by EDoc</i></p>
+</body>
+</html>

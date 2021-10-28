@@ -1,0 +1,11 @@
+%% encoding: UTF-8
+{application,ailib}.
+{modules,[ai_ascii_random,ai_balance,ai_balance_sup,ai_balance_worker_sup,
+          ai_crypto,ai_hash_id,ai_id,ai_iso8601,ai_locker,ai_locker_sup,ai_mq,
+          ai_mq_channel,ai_mq_queue,ai_mq_sup,ai_pool,ai_pool_worker_sup,
+          ai_pooled_task,ai_pooled_task_sup,ai_pooled_task_worker,ai_process,
+          ai_pt,ai_pt_helper,ai_task,ailib,ailib_atom,ailib_base64,
+          ailib_function,ailib_hash,ailib_html,ailib_lists,ailib_maps,
+          ailib_string,ailib_tag,ailib_temp_sup,ailib_timer,ailib_url,
+          ailib_uuid,quickrand,quickrand_cache,quickrand_cache_normal,
+          quickrand_hash,quickrand_normal,random_wh06_int,random_wh82]}.

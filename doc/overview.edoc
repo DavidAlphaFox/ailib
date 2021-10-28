@@ -1,0 +1,7 @@
+
+  @author David Gao <david.alpha.fox@gmail.com>
+  @copyright 2018 - 2021 David Gao
+  @version 0.5.0
+  @title 欢迎使用ailib类库
+  @doc ailib是一个包含很多Erlang中常用工具，用来降低重复代码，
+       进行快速的业务开发的类库

@@ -1,3 +1,5 @@
+%% @doc ailib_string 将Erlang的binary视为字符串，从而对其进行常用的处理和操作
+
 -module(ailib_string).
 
 -export([to_binary/1,to_binary/2]).
@@ -29,10 +31,19 @@ to_boolean(Str) ->
       end
   end.
 
+
+
 -spec to_integer(binary()|list()|integer()) -> integer().
 to_integer(Val) when erlang:is_binary(Val) -> erlang:binary_to_integer(Val);
 to_integer(Val) when erlang:is_list(Val) -> erlang:list_to_integer(Val);
 to_integer(Val) when erlang:is_integer(Val) -> Val.
+
+
+%% @doc 将各种Erlang简单的类型转化成binary.
+%% <li>对于float型，会使用 `io_lib:format("~f")' 去处理浮点数，
+%% 之后再使用 `erlang:list_to_binary' 转为binary。</li>
+%% <li>对于boolean型，将会直接认为是atom，所以需要使用标准的true/false。</li>
+%% @since 0.5.0
 
 -spec to_binary(binary()|list()|integer()
                 |float()|atom()|boolean()) -> binary().
