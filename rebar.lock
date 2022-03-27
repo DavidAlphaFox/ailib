@@ -1,1 +1,8 @@
-[].
+{"1.2.0",
+[{<<"quickrand">>,{pkg,<<"quickrand">>,<<"2.0.4">>},0}]}.
+[
+{pkg_hash,[
+ {<<"quickrand">>, <<"168CA3A8466A26912B8C3A1D6AA58975E1BB49E5C7AFB4998B80F6B90F910490">>}]},
+{pkg_hash_ext,[
+ {<<"quickrand">>, <<"4CB18E9304CF28E054E8DC6E151D1AC7F174E6FE31D5C1A07F71279B92A90800">>}]}
+].

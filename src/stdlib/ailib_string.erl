@@ -48,7 +48,7 @@ to_integer(Val) when erlang:is_integer(Val) -> Val.
 -spec to_binary(binary()|list()|integer()
                 |float()|atom()|boolean()) -> binary().
 to_binary(Val) when erlang:is_integer(Val) -> erlang:integer_to_binary(Val);
-to_binary(Val) when erlang:is_float(Val) -> erlang:list_to_binary(io_lib:format("~f", [Val]));
+to_binary(Val) when erlang:is_float(Val) -> erlang:list_to_binary(io_lib:format("~w", [Val]));
 to_binary(Val) when erlang:is_boolean(Val) -> erlang:atom_to_binary(Val,latin1);
 to_binary(Val) when erlang:is_atom(Val) -> erlang:atom_to_binary(Val,utf8);
 %% iolist场景

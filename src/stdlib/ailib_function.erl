@@ -39,24 +39,39 @@ run_catch(MFA,Others)->
     Error:Reason -> {run_catch,Error,Reason}
   end.
 
+
+
 -spec has(atom(),list()|binary(),integer())-> boolean().
-has(Mod,Fun,ArgCount) when erlang:is_list(Fun)->
-  FunBin = erlang:list_to_binary(Fun),
-  has(Mod,FunBin,ArgCount);
-has(Mod,Fun,ArgCount)->
+has(Mod,FunName,ArgCount)->
   Exports = Mod:module_info(exports),
-  Found = lists:filter(fun({FunName,AC})->
-                           FunNameBin = erlang:atom_to_binary(FunName,latin1),
-                           FunNameBin =:= Fun andalso AC == ArgCount
-                       end,Exports),
-  erlang:length(Found) > 0.
+  try
+    FunName0 = fun_name(FunName),
+    Found = lists:filter(fun({FName,AC})->
+                             FunName0 =:= FName andalso AC == ArgCount
+                         end,Exports),
+    erlang:length(Found) > 0
+  catch
+    _Error:_Reason ->
+      false
+  end.
 
 
+-spec fun_name(atom()|list()|binary()) -> atom().
+fun_name(FunName) when erlang:is_atom(FunName) ->
+  FunName;
+fun_name(FunName) ->
+  FunName0 = ailib_string:to_binary(FunName),
+  ailib_string:to_atom(FunName0, true).
 
--spec while({boolean(), term()},
+
+-spec while(term(),
             fun((term()) -> {boolean(), term()})) -> term().
-while({true,Value}, Fun) -> while(Fun(Value), Fun);
-while({false,Value}, _Fun) -> Value.
+while(Value,Fun)-> while_internal({true,Value},Fun).
+
+-spec while_internal({boolean(), term()},
+                     fun((term()) -> {boolean(), term()})) -> term().
+while_internal({true,Value}, Fun) -> while_internal(Fun(Value), Fun);
+while_internal({false,Value}, _Fun) -> Value.
 
 
 -spec pipe(List :: [term()]) -> term().
@@ -71,19 +86,19 @@ pipe([],[R]) -> R;
 pipe([],[]) -> undefined.
 
 
--spec foreach([{term(),term()}| {term(),term(),term()}]) -> foreach_done | term().
+-spec foreach([{term(),term()}| {term(),term(),term()}]) -> {foreach, done} | term().
 foreach([Fun|T])->
   case run(Fun) of
     continue -> foreach(T);
     V -> V
   end;
-foreach([]) -> foreach_done.
+foreach([]) -> {foreach,done}.
 
 -spec foreach([{term(),term()}|{term(),term(),term()}],
-              [term()]) -> foreach_done | term().
+              [term()]) -> {foreach,done} | term().
 foreach([Fun|T],Others)->
   case run(Fun,Others) of
     continue -> foreach(T,Others);
     V -> V
   end;
-foreach([],_) -> foreach_done.
+foreach([],_) -> {foreach,done}.
