@@ -7,10 +7,12 @@
 
 all() -> 
 [
- not_exist_prefix,
- not_exist_suffix,
- exist_prefix,
- exist_suffix
+ auto_create_with_prefix,
+ auto_create_with_suffix,
+ no_auto_create_with_prefix,
+ no_auto_create_with_suffix,
+ using_exist_with_prefix,
+ using_exist_with_suffix
 ].
 
 init_per_testcase(_,Config)->  
@@ -21,40 +23,59 @@ init_per_testcase(_,Config)->
   | Config].
 end_per_testcase(_,_)-> ok.
 
-not_exist_prefix(Config)->
-  ct:log("ailib_atom:preix with none exist atom prefix"),
+auto_create_with_prefix(Config)->
+  ct:log("ailib_atom:preix auto create new atom"),
+  Text = ?config(none_exist_atom,Config),
+  NewAtom =  ailib_atom:prefix(Text, "prefix_",false),
+  NewAtom0 = erlang:atom_to_binary(NewAtom),
+  case NewAtom0 == <<"prefix_other_atom">> of
+    true -> ok;
+    false ->  ct:fail(prefix_create_wrong_atom)
+  end.
+
+auto_create_with_suffix(Config)->
+  ct:log("ailib_atom:suffix auto create new atom"),
+  Text = ?config(none_exist_atom,Config),
+  NewAtom =  ailib_atom:suffix(Text, "_suffix",false),
+  NewAtom0 = erlang:atom_to_binary(NewAtom),
+  case NewAtom0 == <<"other_atom_suffix">> of
+    true -> ok;
+    false ->  ct:fail(suffix_create_wrong_atom)
+  end.
+
+no_auto_create_with_prefix(Config)->
+  ct:log("ailib_atom:prefix won't auto create new atom"),
   Text = ?config(none_exist_atom,Config),
   try
-    ailib_atom:prefix(Text, prefix,true),
-    false
+    ailib_atom:prefix(Text, suffix,true),
+    ct:fail(prefix_auto_create_new_atom)
   catch
-    error:badarg -> true
+    error:badarg -> ok
   end.
-not_exist_suffix(Config)->
-  ct:log("ailib_atom:suffix with none exist atom suffix"),
+
+no_auto_create_with_suffix(Config)->
+  ct:log("ailib_atom:suffix won't auto create new atom"),
   Text = ?config(none_exist_atom,Config),
   try
     ailib_atom:suffix(Text, suffix,true),
-    false
+    ct:fail(suffix_auto_create_new_atom)
   catch
-    error:badarg -> true
+    error:badarg -> ok
   end.
 
-exist_prefix(Config)->
+using_exist_with_prefix(Config)->
   ct:log("ailib_atom:preix with exist atom prefix"),
   Text = ?config(prefix_atom,Config),
-  try
-    prefix_atom == ailib_atom:prefix(Text, prefix,true)
-  catch
-    error:badarg -> false
+  case prefix_atom == ailib_atom:prefix(Text, "prefix_",true) of
+    true -> ok;
+    false -> ct:fail(prefix_create_wrong_atom)
   end.
 
-exist_suffix(Config)->
+
+using_exist_with_suffix(Config)->
   ct:log("ailib_atom:suffix with  exist atom suffix"),
   Text = ?config(atom_suffix,Config),
-  try
-    atom_suffix == ailib_atom:suffix(Text, suffix,true)
-  catch
-    error:badarg -> false
+  case atom_suffix == ailib_atom:suffix(Text, "_suffix",true) of
+    true -> ok;
+    false -> ct:fail(suffix_create_wrong_atom)
   end.
-

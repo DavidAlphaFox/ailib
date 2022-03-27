@@ -13,9 +13,15 @@ end_per_testcase(_,_)-> ok.
 encode(Config)->
   ct:log("ailib_base64:encode/1 shoule equal base64:encode/1"),
   Text = ?config(text,Config),
-  ailib_base64:encode(Text) == base64:encode(Text).
+  case ailib_base64:encode(Text) == base64:encode(Text) of 
+    true -> ok;
+    false -> ct:fail(not_euqal)
+  end.
 
 decode(Config)->
   ct:log("ailib_base64:decode/1 can decode result of  base64:encode/1"),
   Text = ?config(text,Config),
-  Text == ailib_base64:decode(base64:encode(Text)).
+  case Text == ailib_base64:decode(base64:encode(Text)) of
+    true -> ok;
+    false -> ct:fail(can_not_decode)
+  end.
