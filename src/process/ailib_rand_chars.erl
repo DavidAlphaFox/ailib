@@ -11,7 +11,7 @@
 %% the same value at first call, from wherever the function is called.
 %% However, it may not be appropriate for cryptographic or 'sensible' purposes.
 %% @end
--module(ailib_rand_chars_server).
+-module(ailib_rand_chars).
 -behaviour(gen_server).
 
 -export([start_link/0,start_link/1]).

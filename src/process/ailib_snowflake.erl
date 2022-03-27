@@ -112,4 +112,5 @@ next_id(Millis, Partition, Seq) ->
     {ok,Integer}.
 
 server_name(Partition)->
-  ailib_atom:suffix(?MODULE, <<"_",Partition/integer>>).
+  Par = ailib_string:to_binary(Partition),
+  ailib_atom:suffix(?MODULE, <<"_",Par/binary>>).
