@@ -9,8 +9,8 @@
 -export([to_iolist/1]).
 -export([join/2]).
 
--define(BOOLEAN_TRUE, ["T","1","TRUE"]).
--define(BOOLEAN_FALSE,["F","0","FALSE"]).
+-define(BOOLEAN_TRUE, ["t","T","1","TRUE","true"]).
+-define(BOOLEAN_FALSE,["f","F","0","FALSE","false"]).
 
 -spec to_boolean(binary()|iolist()|1|0|true|false) -> true|false.
 to_boolean(1) -> true;

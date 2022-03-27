@@ -42,7 +42,7 @@ foldl({M,F},Acc,L)-> foldl(M,F,Acc,L).
 -spec foldl(atom(),atom(),Acc,[term()])-> Acc.
 foldl(_M,_F,Acc,[])-> Acc;
 foldl(M,F,Acc,[H|T])->
-  Acc0 = M:F(H,Acc),
+  Acc0 = erlang:apply(M,F,[H,Acc]),
   foldl(M,F,Acc0,T).
 
 -spec foldr(fun((I,Acc)-> Acc)
@@ -50,7 +50,8 @@ foldl(M,F,Acc,[H|T])->
 foldr(_Fun,Acc,[])->Acc;
 foldr(Fun,Acc,L)
   when erlang:is_function(Fun)->
-  lists:foldr(Fun, Acc, L);
+  L0 = lists:reverse(L),
+  lists:foldl(Fun,Acc,L0);
 foldr({M,F},Acc,L)-> foldr(M,F,Acc,L).
 
 -spec foldr(atom(),atom(),Acc,[term()])-> Acc.

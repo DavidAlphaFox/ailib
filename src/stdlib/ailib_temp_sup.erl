@@ -22,11 +22,16 @@
         {error, {shutdown, term()}} |
         {error, term()} |
         ignore.
+
 start_link(Args) ->
+  Children = maps:get(children,Args,[]),
+  SupFlags = maps:filter(
+               fun(K,_V)-> (K /= name) and (K /= children) end,
+               Args),
 	case maps:get(name,Args,undefined) of
-    undefined -> supervisor:start_link(?MODULE,Args);
-    Name when erlang:is_tuple(Name) -> supervisor:start_link(Name,?MODULE,Args);
-    Name -> supervisor:start_link({local,Name},?MODULE,Args)
+    undefined -> supervisor:start_link(?MODULE,{SupFlags,Children});
+    Name when erlang:is_tuple(Name) -> supervisor:start_link(Name,?MODULE,{SupFlags,Children});
+    Name -> supervisor:start_link({local,Name},?MODULE,{SupFlags,Children})
 	end.
 
 %%%===================================================================
@@ -42,19 +47,11 @@ start_link(Args) ->
 %% specifications.
 %% @end
 %%--------------------------------------------------------------------
--spec init(Args :: term()) ->
+-spec init(Args :: {term(),term()}) ->
         {ok, {SupFlags :: supervisor:sup_flags(),
               [ChildSpec :: supervisor:child_spec()]}} |
         ignore.
-init(Args) ->
-		Children = maps:get(children,Args,[]),
-		SupFlags = maps:filter(
-                 fun(K,_V)-> (K /= name) and (K /= children) end,
-                 Args),
-    % #{strategy => Strategy,
-    %   intensity => Intensity,
-    %   period =>Period},
-
+init({SupFlags,Children}) ->
   {ok, {SupFlags, Children}}.
 
 %%%===================================================================

@@ -1,13 +1,16 @@
--module(ai_process).
--export([demonitor_process/2,monitor_process/2]).
--export([least_busy/1]).
--export([global_process/1]).
--export([get/2]).
+-module(ailib_proc).
+-compile({no_auto_import,
+          [get/1,monitor/2,demonitor/2]}).
 
--spec monitor_process(Pid :: undefined | pid(),
+-export([demonitor/2,monitor/2]).
+-export([least_busy/1]).
+-export([global/1]).
+-export([cached_get/2]).
+
+-spec monitor(Pid :: undefined | pid(),
                       Monitors :: map() | ets:tid()) -> map() | ets:tid().
-monitor_process(undefined,Monitors) -> Monitors;
-monitor_process(Pid,Monitors) when erlang:is_map(Monitors)->
+monitor(undefined,Monitors) -> Monitors;
+monitor(Pid,Monitors) when erlang:is_map(Monitors)->
   case maps:get(Pid,Monitors,undefined) of
     undefined ->
       MRef = erlang:monitor(process,Pid),
@@ -15,7 +18,7 @@ monitor_process(Pid,Monitors) when erlang:is_map(Monitors)->
       maps:put(MRef,Pid,M1);
     _ -> Monitors
   end;
-monitor_process(Pid,Monitors)->
+monitor(Pid,Monitors)->
   case ets:match_object(Monitors, {Pid,'_'}) of
     [] ->
       MRef = erlang:monitor(process, Pid),
@@ -23,10 +26,10 @@ monitor_process(Pid,Monitors)->
     _ -> ok
   end,
   Monitors.
--spec demonitor_process(Pid :: undefined | identifier(),
+-spec demonitor(Pid :: undefined | identifier(),
                         Monitors :: map() | ets:tid()) -> map() | ets:tid().
-demonitor_process(undefined,Monitors)-> Monitors;
-demonitor_process(Pid,Monitors) when erlang:is_map(Monitors) and erlang:is_pid(Pid) -> 
+demonitor(undefined,Monitors)-> Monitors;
+demonitor(Pid,Monitors) when erlang:is_map(Monitors) and erlang:is_pid(Pid) ->
   case maps:get(Pid,Monitors,undefined) of
     undefined -> Monitors;
     MRef ->
@@ -34,7 +37,7 @@ demonitor_process(Pid,Monitors) when erlang:is_map(Monitors) and erlang:is_pid(P
       M1 = maps:remove(MRef,Monitors),
       maps:remove(Pid,M1)
   end;
-demonitor_process(MRef,Monitors) when erlang:is_map(Monitors) and erlang:is_reference(MRef)->
+demonitor(MRef,Monitors) when erlang:is_map(Monitors) and erlang:is_reference(MRef)->
   erlang:demonitor(MRef,[flush]),
   case maps:get(MRef,Monitors,undefined) of
     undefined -> Monitors;
@@ -42,7 +45,7 @@ demonitor_process(MRef,Monitors) when erlang:is_map(Monitors) and erlang:is_refe
       M1 = maps:remove(MRef,Monitors),
       maps:remove(Pid,M1)
   end;
-demonitor_process(Pid,Monitors) when erlang:is_pid(Pid)->
+demonitor(Pid,Monitors) when erlang:is_pid(Pid)->
   case ets:match_object(Monitors,{Pid,'_'}) of
     [{Pid,MRef}] ->
       erlang:demonitor(MRef,[flush]),
@@ -50,7 +53,7 @@ demonitor_process(Pid,Monitors) when erlang:is_pid(Pid)->
     [] -> ok
   end,
   Monitors;
-demonitor_process(MRef,Monitors) when erlang:is_reference(MRef)->
+demonitor(MRef,Monitors) when erlang:is_reference(MRef)->
   case ets:match_object(Monitors,{'_',MRef}) of
     [{Pid,MRef}] ->
       erlang:demonitor(MRef,[flush]),
@@ -62,13 +65,14 @@ demonitor_process(MRef,Monitors) when erlang:is_reference(MRef)->
 -spec least_busy(Pids::[pid()]) -> {ok,pid()} | {error,empty_process_group}.
 least_busy(Pids) ->
   Members =
-    lists:map(fun(Pid) ->
-                  [
-                   {message_queue_len, Messages},
-                   {memory,MemorySize}
-                  ] = erlang:process_info(Pid, [message_queue_len,memory]),
-                  {Pid, Messages, MemorySize}
-              end, Pids),
+    lists:map(
+      fun(Pid) ->
+          [
+           {message_queue_len, Messages},
+           {memory,MemorySize}
+          ] = erlang:process_info(Pid, [message_queue_len,memory]),
+          {Pid, Messages, MemorySize}
+      end, Pids),
   SortedMembers = lists:keysort(2, lists:keysort(3, Members)),
   case SortedMembers of
     [{Pid, _Messages, _StackSize}] -> {ok,Pid};
@@ -85,8 +89,9 @@ least_busy(Pids) ->
       end;
     _ -> {error, empty_process_group}
   end.
--spec global_process(Pid :: pid())-> {atom(),pid()}.
-global_process(Pid)->
+
+-spec global(Pid :: pid())-> {atom()|pid(),atom()}.
+global(Pid)->
   Name =
     case erlang:process_info(Pid, [registered_name]) of
       [{registered_name, []}] -> Pid;
@@ -94,8 +99,8 @@ global_process(Pid)->
     end,
   {Name,erlang:node(Pid)}.
 
--spec get(term(),function())-> term().
-get(Key,Fun)->
+-spec cached_get(term(),function())-> term().
+cached_get(Key,Fun)->
   case erlang:get(Key) of
     undefined ->
       R = erlang:apply(Fun,[]),

@@ -2,16 +2,11 @@
 -export([replace/2,
          replace/4]).
 %% 该模块只用于简单的tag替换
-%% 虽然aihtml项目中提供了该功能，但aihtml的功能过于复杂
-%% 可以将该模块视为aihtml的降级版本
 
 -define(START_TAG, <<"{{">>).
 -define(STOP_TAG,  <<"}}">>).
 
--define(IIF(Cond, TValue, FValue),
-        case Cond of true -> TValue; false -> FValue end).
-
--define(ADD(X, Y), ?IIF(X =:= <<>>, Y, [X | Y])).
+-define(ADD(X, Y), case X =:= <<>> of true -> Y; false -> [X | Y] end).
 
 -record(state,{start = ?START_TAG :: binary(),
                stop = ?STOP_TAG  :: binary()}).
@@ -83,12 +78,13 @@ split_tag(#state{start = StartTag, stop = StopTag}, Bin) ->
     {StartPos, StartTagLen} ->
       PosLimit = byte_size(Bin) - StartTagLen,
       ShiftNum =
-        ailib_function:while({true, StartPos + 1}, %% 在下一个StartTag之前一直向前推进
+        ailib_fn:while(StartPos + 1, %% 在下一个StartTag之前一直向前推进
                              fun(Pos) ->  %% {{{ ,startPos 0, StartDelimiterLen = 2 ShitNum = 1
-                                 ?IIF(Pos =< PosLimit
-                                      andalso binary:part(Bin, Pos, StartTagLen) =:= StartTag,
-                                      {true, Pos + 1},
-                                      {false, Pos})
+                                 case Pos =< PosLimit
+                                      andalso binary:part(Bin, Pos, StartTagLen) =:= StartTag of
+                                   true -> {true, Pos + 1};
+                                   false -> {false, Pos}
+                                 end
                              end) - StartPos - 1,
       %% PreTag是StartTag之前的文本，X是包含StarTag的文本
       {PreTag, X} = erlang:split_binary(Bin, StartPos + ShiftNum),
@@ -104,7 +100,7 @@ render([],_Context,Acc)->Acc;
 render([{tag,Tag}|T],Context,Acc)->
   Acc0 =
     case maps:get(Tag,Context,undefined) of
-      undefined -> Acc;
+      undefined -> throw({render,tag_missing_in_context});
       Value ->
         BValue = ailib_string:to_binary(Value),
         <<Acc/binary,BValue/binary>>

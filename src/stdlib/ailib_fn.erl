@@ -1,8 +1,9 @@
--module(ailib_function).
--export([run/1,
-         run/2,
-         run_catch/1,
-         run_catch/2,
+-module(ailib_fn).
+-compile({no_auto_import,[apply/2,apply/3]}).
+-export([apply/1,
+         apply/2,
+         catch_apply/1,
+         catch_apply/2,
          has/3,
          while/2,
          pipe/1,
@@ -10,36 +11,34 @@
          foreach/1,
          foreach/2]).
 
--spec run({module(),atom(),[term()]}
+-spec apply({module(),atom(),[term()]}
            |{function(),[term()]})->term().
-run({M,F,A})-> erlang:apply(M,F,A);
-run({F,A}) -> erlang:apply(F,A).
+apply({M,F,A})-> erlang:apply(M,F,A);
+apply({F,A}) -> erlang:apply(F,A).
 
--spec run({module(),atom(),[term()]}
+-spec apply({module(),atom(),[term()]}
            |{function(),[term()]},
             [term()])->term().
-run({M,F,A},Others) -> erlang:apply(M,F,A ++ Others);
-run({F,A},Others) -> erlang:apply(F,A ++ Others).
+apply({M,F,A},Others) -> erlang:apply(M,F,A ++ Others);
+apply({F,A},Others) -> erlang:apply(F,A ++ Others).
 
--spec run_catch({module(),atom(),[term()]}
-               |{function(),[term()]}) -> term()|{run_catch,term(),term()}.
-run_catch(MFA)->
+-spec catch_apply({module(),atom(),[term()]}
+               |{function(),[term()]}) -> term()|{catch_apply,term(),term()}.
+catch_apply(MFA)->
   try
-    run(MFA)
+    apply(MFA)
   catch
-    Error:Reason -> {run_catch,Error,Reason}
+    Error:Reason -> {catch_apply,Error,Reason}
   end.
 
--spec run_catch({module(),atom(),[term()]}
-               |{function(),[term()]},[term()]) -> term()|{run_catch,term(),term()}.
-run_catch(MFA,Others)->
+-spec catch_apply({module(),atom(),[term()]}
+               |{function(),[term()]},[term()]) -> term()|{catch_apply,term(),term()}.
+catch_apply(MFA,Others)->
   try
-    run(MFA,Others)
+    apply(MFA,Others)
   catch
-    Error:Reason -> {run_catch,Error,Reason}
+    Error:Reason -> {catch_apply,Error,Reason}
   end.
-
-
 
 -spec has(atom(),list()|binary(),integer())-> boolean().
 has(Mod,FunName,ArgCount)->
@@ -80,7 +79,7 @@ pipe(L)-> pipe(L,[]).
 -spec pipe(List :: [term()],
            Acc :: [term()]) -> term().
 pipe([H|T],Acc)->
-  R = run(H,Acc),
+  R = apply(H,Acc),
   pipe(T,[R]);
 pipe([],[R]) -> R;
 pipe([],[]) -> undefined.
@@ -88,7 +87,7 @@ pipe([],[]) -> undefined.
 
 -spec foreach([{term(),term()}| {term(),term(),term()}]) -> {foreach, done} | term().
 foreach([Fun|T])->
-  case run(Fun) of
+  case apply(Fun) of
     continue -> foreach(T);
     V -> V
   end;
@@ -97,7 +96,7 @@ foreach([]) -> {foreach,done}.
 -spec foreach([{term(),term()}|{term(),term(),term()}],
               [term()]) -> {foreach,done} | term().
 foreach([Fun|T],Others)->
-  case run(Fun,Others) of
+  case apply(Fun,Others) of
     continue -> foreach(T,Others);
     V -> V
   end;
