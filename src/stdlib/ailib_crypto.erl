@@ -1,12 +1,10 @@
--module(ai_crypto).
+-module(ailib_crypto).
 -export([mac/3,mac/4]).
 -export([hmac/3,hmac/4]).
 
 -if(?OTP_RELEASE > 22).
-mac(Type,SubType,Key,Data)->
-  crypto:mac(Type,SubType,Key,Data).
-mac(Type,Key,Data)->
-  crypto:mac(Type, Key, Data).
+mac(Type,SubType,Key,Data)->crypto:mac(Type,SubType,Key,Data).
+mac(Type,Key,Data)->crypto:mac(Type, Key, Data).
 
 hmac(Type,Key,Data)-> crypto:mac(hmac,Type,Key,Data).
 hmac(Type,Key,Data,Length) ->

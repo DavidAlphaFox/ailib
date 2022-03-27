@@ -1,4 +1,4 @@
--module(ai_iso8601).
+-module(ailib_iso8601).
 
 -export([add_time/4,
          add_days/2,
@@ -28,8 +28,8 @@
 
 %% API
 
--spec add_time (calendar:datetime(), integer(), integer(), integer())
-                -> calendar:datetime().
+-spec add_time (calendar:datetime(),integer(),
+                integer(), integer()) -> calendar:datetime().
 %% @doc Add some time to the supplied `calendar:datetime()'.
 add_time({_, _, _}=Timestamp, H, M, S) ->
     add_time(calendar:now_to_datetime(Timestamp), H, M, S);

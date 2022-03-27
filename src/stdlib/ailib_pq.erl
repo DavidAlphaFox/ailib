@@ -1,4 +1,4 @@
--module(ai_pq).
+-module(ailib_pq).
 
 -export([
          empty/0,
@@ -28,10 +28,11 @@ remove(Priority, Value, Tree) ->
 -spec add(Priority::integer(),Value :: term(),
           Tree :: term()) -> term().
 add(Priority, Value, Tree) ->
-    NewVal = case gb_trees:lookup(Priority, Tree) of
-               none -> [Value];
-               {value, ValueList} -> [Value|ValueList]
-             end,
+  NewVal =
+    case gb_trees:lookup(Priority, Tree) of
+      none -> [Value];
+      {value, ValueList} -> [Value|ValueList]
+    end,
   gb_trees:enter(Priority, NewVal, Tree).
 
 %% @spec move(OldPriority, NewPriority, Value, Tree) -> Tree1
