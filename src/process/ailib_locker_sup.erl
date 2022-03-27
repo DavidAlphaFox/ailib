@@ -24,9 +24,7 @@
 %%%===================================================================
 new(Opts)->
   case erlang:whereis(?SERVER) of
-    undefined ->
-      {ok,_Pid} = ailib_locker_sup:start_link(),
-      supervisor:start_child(?SERVER,[Opts]);
+    undefined -> throw({ailib_locker,supervisor_is_not_started});
     _ -> supervisor:start_child(?SERVER,[Opts])
   end.
 supervisor_spec()->

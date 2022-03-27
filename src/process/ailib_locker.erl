@@ -192,7 +192,7 @@ handle_cast(_Request, State) ->
 	{noreply, NewState :: term(), hibernate} |
 	{stop, Reason :: normal | term(), NewState :: term()}.
 handle_info({'DOWN', _MonitorReference, process, Pid,_Reason},State)->
-    NewState = processor_down(Pid,State),
+    NewState = process_down(Pid,State),
     {noreply,NewState};
 handle_info(_Info, State) ->
 	{noreply, State}.
@@ -208,7 +208,7 @@ handle_info(_Info, State) ->
 %%--------------------------------------------------------------------
 -spec terminate(Reason :: normal | shutdown | {shutdown, term()} | term(),
 	State :: term()) -> any().
-terminate(_Reason, _State) ->
+terminate(_Reason,_State) ->
 	ok.
 
 %%--------------------------------------------------------------------
@@ -242,7 +242,7 @@ format_status(_Opt, Status) ->
 %%%===================================================================
 server_name(Locker)-> ailib_atom:prefix(Locker,?PREFIX,true).
 
-processor_down(Pid,#state{queue = W,lockers = L} = State)->
+process_down(Pid,#state{queue = W,lockers = L} = State)->
   case queue:member(Pid,W) of
     true -> remove_waiter(Pid,State);
     _ ->

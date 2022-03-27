@@ -5,17 +5,17 @@
 -include_lib("common_test/include/ct.hrl").
 
 
-all() -> 
-[
- auto_create_with_prefix,
- auto_create_with_suffix,
- no_auto_create_with_prefix,
- no_auto_create_with_suffix,
- using_exist_with_prefix,
- using_exist_with_suffix
-].
+all() ->
+  [
+   auto_create_with_prefix,
+   auto_create_with_suffix,
+   no_auto_create_with_prefix,
+   no_auto_create_with_suffix,
+   using_exist_with_prefix,
+   using_exist_with_suffix
+  ].
 
-init_per_testcase(_,Config)->  
+init_per_testcase(_,Config)->
   [
    {prefix_atom,<<"atom">>},
    {atom_suffix,<<"atom">>},
