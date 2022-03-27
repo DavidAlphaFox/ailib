@@ -5,7 +5,8 @@
          foldl/3,
          foldl/4,
          foldr/3,
-         foldr/4]).
+         foldr/4,
+         unique/1]).
 
 -spec search(fun((T) -> boolean()), [T]) -> {value, T} | false.
 search(Pred, [Hd|Tail]) ->
@@ -58,3 +59,16 @@ foldr({M,F},Acc,L)-> foldr(M,F,Acc,L).
 foldr(M,F,Acc,L)->
   L0 = lists:reverse(L),
   foldl(M,F,Acc,L0).
+
+-spec unique(list())->list().
+unique([]) -> [];
+unique(L) ->
+  {L0,_} = lists:foldl(
+             fun(I,{LAcc,Set} = Acc) ->
+                 case sets:is_element(I, Set) of
+                   true -> Acc;
+                   false -> {[I|LAcc],sets:add_element(I, Set)}
+                 end
+             end,{[],sets:new()}, L),
+  lists:reverse(L0).
+

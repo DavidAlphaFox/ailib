@@ -1,4 +1,4 @@
--module(ai_hash_id).
+-module(ailib_hashid).
 
 %% hash混淆ID的方案
 %% Fisher–Yates_shuffle 混淆算法
@@ -15,7 +15,7 @@
 -endif.
 
 % Type declaration
--record (ai_hash_id, {
+-record (ailib_hashid, {
     salt       = [] :: list(),
     min_length = 0  :: non_neg_integer(),
     alphabet   = [] :: list(),
@@ -23,9 +23,9 @@
     guards     = [] :: list()
 }).
 
--type ai_hash_id() :: #ai_hash_id{}.
+-type ailib_hashid() :: #ailib_hashid{}.
 
--export_type([ai_hash_id/0]).
+-export_type([ailib_hashid/0]).
 
 % Constants
 -define(VERSION,              "1.0.3").
@@ -38,19 +38,19 @@
 -define(DEFAULT_SEPS,         "cfhistuCFHISTU").
 
 %% @doc make a new hashids context (convenient function)
--spec new() -> ai_hash_id().
+-spec new() -> ailib_hashid().
 new() ->
-    new([]).
+  new([]).
 
 %% @doc make a new hashids context
--spec new([] | [{salt | default_alphabet | min_hash_length, any()}]) -> ai_hash_id().
+-spec new([] | [{salt | default_alphabet | min_hash_length, any()}]) -> ailib_hashid().
 new(Opts) ->
     Salt            = get_value(salt, Opts, []),
     NotUniqAlphabet = get_value(default_alphabet, Opts, ?DEFAULT_ALPHABET),
     MinHashLength   = erlang:max(get_value(min_hash_length, Opts, 0), 0),
 
     % validate options
-    Alphabet = unique(NotUniqAlphabet),
+    Alphabet = ailib_lists:unique(NotUniqAlphabet),
 
     valid = validate_alphabet(Alphabet),
     ok    = validate_salt(Salt),
@@ -59,7 +59,7 @@ new(Opts) ->
     {Guards, FinalSeps, FinalAlphabet} = setup_guard(Seps, ShuffledAlphabet),
 
     % New HashID Context
-    #ai_hash_id {
+    #ailib_hashid{
         salt       = Salt,
         min_length = MinHashLength,
         alphabet   = FinalAlphabet,
@@ -68,8 +68,8 @@ new(Opts) ->
     }.
 
 %% @doc encode numbers
-%% @spec encode(ai_hash_id(), integer() | [integer(), ...]) -> string()
--spec encode(ai_hash_id(), integer() | [integer(), ...]) -> string().
+%% @spec encode(ailib_hashid(), integer() | [integer(), ...]) -> string()
+-spec encode(ailib_hashid(), integer() | [integer(), ...]) -> string().
 encode(_, N) when is_integer(N), N < 0  ->
     "";
 encode(Context, N) when is_integer(N), N >= 0 ->
@@ -82,15 +82,15 @@ encode(Context, N) when is_list(N) ->
 
 
 %% @doc encode hex string
-%% @spec encode_hex(ai_hash_id(), string()) -> string()
--spec encode_hex(ai_hash_id(), string()) -> string().
+%% @spec encode_hex(ailib_hashid(), string()) -> string()
+-spec encode_hex(ailib_hashid(), string()) -> string().
 encode_hex(Context, Str) when is_list(Str) ->
     encode(Context, [list_to_integer([$1 | S], 16) || S <- parts(Str, 12)]).
 
 
 %% @doc decode hash string
-%% @spec decode(ai_hash_id(), string()) -> [integer(), ...]
--spec decode(ai_hash_id(), string()) -> [integer(), ...].
+%% @spec decode(ailib_hashid(), string()) -> [integer(), ...]
+-spec decode(ailib_hashid(), string()) -> [integer(), ...].
 decode(_, []) ->
     "";
 decode(Context, HashStr) when is_list(HashStr) ->
@@ -98,31 +98,31 @@ decode(Context, HashStr) when is_list(HashStr) ->
 
 
 %% @doc decode hash string to decoded hex string
-%% @spec decode_hex(ai_hash_id(), string()) -> string()
--spec decode_hex(ai_hash_id(), string()) -> string().
+%% @spec decode_hex(ailib_hashid(), string()) -> string()
+-spec decode_hex(ailib_hashid(), string()) -> string().
 decode_hex(Context, HashStr) when is_list(HashStr) ->
     lists:concat([begin [_ | T] = integer_to_list(I, 16), T end || I <- decode(Context, HashStr)]).
 
 
 %% @doc returns salt from context
-%% @spec salt(ai_hash_id()) -> string()
--spec salt(ai_hash_id()) -> string().
-salt(Context) when is_record(Context, ai_hash_id) ->
-    Context#ai_hash_id.salt.
+%% @spec salt(ailib_hashid()) -> string()
+-spec salt(ailib_hashid()) -> string().
+salt(Context) when is_record(Context, ailib_hashid) ->
+    Context#ailib_hashid.salt.
 
 
 %% @doc returns adjusted custom alphabet from context
-%% @spec alphabet(ai_hash_id()) -> string()
--spec alphabet(ai_hash_id()) -> string().
-alphabet(Context) when is_record(Context, ai_hash_id) ->
-    Context#ai_hash_id.alphabet.
+%% @spec alphabet(ailib_hashid()) -> string()
+-spec alphabet(ailib_hashid()) -> string().
+alphabet(Context) when is_record(Context, ailib_hashid) ->
+    Context#ailib_hashid.alphabet.
 
 
 %% @doc returns minimum hash length from context
-%% @spec min_hash_length(ai_hash_id()) -> non_neg_integer()
--spec min_hash_length(ai_hash_id()) -> non_neg_integer().
-min_hash_length(Context) when is_record(Context, ai_hash_id) ->
-    Context#ai_hash_id.min_length.
+%% @spec min_hash_length(ailib_hashid()) -> non_neg_integer()
+-spec min_hash_length(ailib_hashid()) -> non_neg_integer().
+min_hash_length(Context) when is_record(Context, ailib_hashid) ->
+    Context#ailib_hashid.min_length.
 
 
 %% ===================================================================
@@ -130,7 +130,7 @@ min_hash_length(Context) when is_record(Context, ai_hash_id) ->
 %% ===================================================================
 internal_encode(_, []) ->
     "";
-internal_encode(#ai_hash_id { salt       = Salt,
+internal_encode(#ailib_hashid { salt       = Salt,
                                    min_length = MinHashLength,
                                    alphabet   = Alphabet,
                                    seperators = Seps,
@@ -195,7 +195,7 @@ post_encode(R, _, _) ->
     R.
 
 
-internal_decode(#ai_hash_id { salt       = Salt,
+internal_decode(#ailib_hashid { salt       = Salt,
                                    alphabet   = Alphabet,
                                    seperators = Seps,
                                    guards     = Guards} = Context, HashStr) ->
@@ -266,35 +266,35 @@ validate_salt(_)                       -> {error, invalid_salt}.
 
 
 setup_sep(Alphabet, Salt) ->
-    % seps should contain only characters present in alphabet; alphabet should not contains seps
-    {NotIn, In}        = lists:partition(fun(S) -> lists:member(S, Alphabet) end, ?DEFAULT_SEPS),
-    UnshuffledAlphabet = Alphabet -- NotIn,
-    UnshuffledSeps     = ?DEFAULT_SEPS -- In,
-
-    Seps                               = consistent_shuffle(UnshuffledSeps, Salt),
-    {AdjustedSeps, AdjustedAlphabet}   = calculate_seps(Seps, UnshuffledAlphabet),
-    ShuffledAlphabet                   = consistent_shuffle(AdjustedAlphabet, Salt),
-
-    {AdjustedSeps, ShuffledAlphabet}.
+  % seps should contain only characters present in alphabet; alphabet should not contains seps
+  {NotIn, In}        = lists:partition(fun(S) -> lists:member(S, Alphabet) end, ?DEFAULT_SEPS),
+  UnshuffledAlphabet = Alphabet -- NotIn,
+  UnshuffledSeps     = ?DEFAULT_SEPS -- In,
+  %% 对分割符号进行洗牌
+  Seps                               = consistent_shuffle(UnshuffledSeps, Salt),
+  {AdjustedSeps, AdjustedAlphabet}   = calculate_seps(Seps, UnshuffledAlphabet),
+  ShuffledAlphabet                   = consistent_shuffle(AdjustedAlphabet, Salt),
+  {AdjustedSeps, ShuffledAlphabet}.
 
 
 calculate_seps(Seps, Alphabet) when length(Alphabet) == 0;
                                     length(Alphabet) div length(Seps) > (?SEP_DIV) ->
 
-    SepLength = ceiling(length(Alphabet) / ?SEP_DIV),
-    Length = case SepLength of
-                    1 -> 2;
-                    _ -> SepLength
-             end,
+  SepLength = ceiling(length(Alphabet) / ?SEP_DIV),
+  Length =
+    case SepLength of
+      1 -> 2;
+      _ -> SepLength
+    end,
 
-    Diff = Length - length(Seps),
-    if  Diff > 0 ->
-            {Seps ++ lists:sublist(Alphabet, Diff), lists:sublist(Alphabet, Diff + 1, length(Alphabet) - Diff) };
-        true ->
-            {lists:sublist(Seps, 1, Length), Alphabet}
-    end;
+  Diff = Length - length(Seps),
+  if  Diff > 0 ->
+      {Seps ++ lists:sublist(Alphabet, Diff), lists:sublist(Alphabet, Diff + 1, length(Alphabet) - Diff) };
+      true ->
+      {lists:sublist(Seps, 1, Length), Alphabet}
+  end;
 calculate_seps(Seps, Alphabet) ->
-    {Seps, Alphabet}.
+  {Seps, Alphabet}.
 
 
 setup_guard(Seps, Alphabet) ->
@@ -345,45 +345,38 @@ unhash(Input, Alphabet) ->
 %% Helper Functions
 %% ===================================================================
 get_value(Key, Opts, Default) ->
-    case lists:keyfind(Key, 1, Opts) of
-        {_, Value} -> Value;
-        _ -> Default
-    end.
+  case lists:keyfind(Key, 1, Opts) of
+    {_, Value} -> Value;
+    _ -> Default
+  end.
 
 
-unique([])      -> [];
-unique([H | T]) -> [H | [X || X <- unique(T), X =/= H]].
-
-
-consistent_shuffle(Alphabet, []) ->
-    Alphabet;
+%% 当没有salt的时候，直接使用字母表
+consistent_shuffle(Alphabet, []) -> Alphabet;
 consistent_shuffle(Alphabet, Salt) ->
-    SaltLength = length(Salt),
-
-    {Shuffled, _, _, _}  =  lists:foldr(
-                                fun(_, {_, _, _, 0} = Acc) ->
-                                        Acc;
-                                   (_, {Al, V, P, L}) ->
-                                        V1 = V rem SaltLength,
-                                        N  = lists:nth(V1 + 1, Salt),
-                                        P1 = P + N,
-
-                                        J   = (N + V1 + P1) rem L,
-                                        Al1 = swap(Al, J, L),
-
-                                        {Al1, V1 + 1, P + N, L - 1}
-
+  %% 获取salt的长度
+  SaltLength = length(Salt),
+  {Shuffled, _, _, _}  =  lists:foldr(
+                            fun(_, {_, _, _, 0} = Acc) ->
+                                Acc;
+                               (_, {Al, V, P, L}) ->
+                                %% V会在0 至 SaltLength -1之间循环
+                                %% P是根据Salt字母+V的位移动值
+                                V1 = V rem SaltLength,
+                                N  = lists:nth(V1 + 1, Salt), %% 从盐中取出字母N
+                                P1 = P + N, %% 字母N的位置移动P
+                                J   = (N + V1 + P1) rem L, %% (N + V1 + P + N) rem L
+                                Al1 = swap(Al, J, L), %% 交换位置
+                                {Al1, V1 + 1, P + N, L - 1}
                                 end, {Alphabet, 0, 0, length(Alphabet) - 1}, Alphabet),
+  Shuffled.
 
-    Shuffled.
-
-
+%% 将S1位置的字母和S2位置的字母进行交换
 swap(List, S1, S2) ->
-    {List2, [F | List3]} = lists:split(S1, List),
-    LT                   = List2 ++ [lists:nth(S2 + 1, List) | List3],
-    {List4, [_ | List5]} = lists:split(S2, LT),
-
-    List4 ++ [F | List5].
+  {List2, [F | List3]} = lists:split(S1, List), %% 在S1处将字母表分开，将位置S1的字母取出
+  LT = List2 ++ [lists:nth(S2 + 1, List) | List3],  %% 将S2处的字母放到S1处
+  {List4, [_ | List5]} = lists:split(S2, LT),  %% 删除S2处的字母
+  List4 ++ [F | List5]. %% 将S1处的字母放到S2处
 
 
 ceiling(X) ->
