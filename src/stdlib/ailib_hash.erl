@@ -1,42 +1,55 @@
 -module(ailib_hash).
--export([md5/1,
-         md5/2,
-         sha/1,
-         sha/2,
-         sha256/1,
-         sha256/2,
-         sha512/1,
-         sha512/2]).
+-behaviour(ailib_string).
+-include("ailib.hrl").
+-export([new/1,new/2,new/3]).
+-export([hash/2]).
+-export([to_binary/1]).
 
--spec md5(binary()|iolist())->binary().
-md5(Data)-> md5(Data,uppper).
+-export_type([type/0]).
+-type type() :: #{
+	?TYPE => ?M,
+	alog => undefined,
+  data => undefined,
+  format => uppper,
+  hash => undefined
+}.
 
--spec sha(binary()|iolist())->binary().
-sha(Data)-> sha(Data,uppper).
+-spec new(atom())->type().
+new(Alog)->new(Alog,undefined,upper).
 
--spec sha256(binary()|iolist())->binary().
-sha256(Data)-> sha256(Data,uppper).
+-spec new(atom(),any()) -> type().
+new(Alog,Data)-> new(Alog,Data,uppper).
 
--spec sha512(binary()|iolist())->binary().
-sha512(Data)-> sha512(Data,uppper).
+-spec new(atom(),any(),uppper|lower) -> type().
+new(Alog,Data,Format)->
+  Hash = do_hash(Alog,Data,Format),
+  #{
+    ?TYPE => ?M,
+		alog => Alog,
+    format => Format,
+    data => Data,
+    hash => Hash
+  }.
 
--spec md5(binary()|iolist(),upper|lower)->binary().
-md5(Data,Case)->
-  Hash = crypto:hash(md5, Data),
-  ailib_string:to_hex(Hash,128,Case).
+-spec hash(type(),any()) -> type().
+hash(#{?TYPE := ?M,alog := Alog,
+  format := Format} = O,Data)->
+  Hash = do_hash(Alog,Data,Format),
+  O#{data := Data,hash := Hash}.
 
--spec sha(binary()|iolist(),upper|lower)->binary().
-sha(Data,Case)->
-  Hash = crypto:hash(sha,Data),
-  ailib_string:to_hex(Hash,160,Case).
+-spec to_binary(type())->binary().
+to_binary(#{?TYPE := ?M, data := Data, 
+  alog := Alog,format := Format,hash := undefined})->
+  do_hash(Alog,Data,Format);
+to_binary(#{?TYPE := ?M,hash := Hash})-> Hash.
 
--spec sha256(binary()|iolist(),upper|lower)->binary().
-sha256(Data,Case) ->
-  Hash = crypto:hash(sha256,Data),
-  ailib_string:to_hex(Hash,256,Case).
 
--spec sha512(binary()|iolist(),upper|lower)->binary().
-sha512(Data,Case)->
-  Hash = crypto:hash(sha512,Data),
-  ailib_string:to_hex(Hash,512,Case).
-
+-spec do_hash(atom(),any(),upper|lower) -> binary().
+do_hash(Alog,Data,Format)->
+  case Data of
+    undefined -> undefined;
+    _ -> 
+      Hash = crypto:hash(Alog,Data),
+      ailib_string:format_hex_string(Hash,Format)
+  end.
+   
