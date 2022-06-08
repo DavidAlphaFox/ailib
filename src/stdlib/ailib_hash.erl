@@ -18,7 +18,7 @@
 new(Alog)->new(Alog,undefined,upper).
 
 -spec new(atom(),any()) -> type().
-new(Alog,Data)-> new(Alog,Data,uppper).
+new(Alog,Data)-> new(Alog,Data,upper).
 
 -spec new(atom(),any(),uppper|lower) -> type().
 new(Alog,Data,Format)->
