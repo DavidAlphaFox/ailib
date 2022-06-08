@@ -1,4 +1,8 @@
 -module(ailib_atom).
+-behaviour(ailib_string).
+
+-include("ailib.hrl").
+-export([to_binary/1]).
 -export([suffix/3,
          prefix/3,
          suffix/2,
@@ -31,3 +35,5 @@ prefix(Name,Prefix,Exist)->
   StrName  = <<Prefix0/binary,Name0/binary>>,
   ailib_string:to_atom(StrName,Exist).
 
+-spec to_binary(atom()) -> binary().
+to_binary(Val)-> erlang:atom_to_binary(Val,utf8).

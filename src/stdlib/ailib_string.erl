@@ -1,13 +1,18 @@
 %% @doc ailib_string 将Erlang的binary视为字符串，从而对其进行常用的处理和操作
 
 -module(ailib_string).
+-include("ailib.hrl").
 
--export([to_binary/1,to_binary/2]).
 -export([to_integer/1,to_boolean/1]).
 -export([to_hex/1,to_hex/2]).
 -export([to_atom/1,to_atom/2]).
 -export([to_iolist/1]).
 -export([join/2]).
+
+-export([to_binary/1,to_binary/2]).
+-callback to_binary(any()) -> binary().
+-option_callbacks([to_binary/1]).
+
 
 -define(BOOLEAN_TRUE, ["t","T","1","TRUE","true"]).
 -define(BOOLEAN_FALSE,["f","F","0","FALSE","false"]).
@@ -44,25 +49,26 @@ to_integer(Val) when erlang:is_integer(Val) -> Val.
 %% 之后再使用 `erlang:list_to_binary' 转为binary。</li>
 %% <li>对于boolean型，将会直接认为是atom，所以需要使用标准的true/false。</li>
 %% @since 0.5.0
+-spec to_binary(any()) -> binary().
+to_binary(X) ->
+  case X of
+    #{?TYPE := ailib_error} ->
+      ailib_error:to_binary(X);
+    X_ when erlang:is_binary(X_) ->
+      ailib_binary:to_binary(X);
+    X_ when erlang:is_integer(X_) ->
+      ailib_integer:to_binary(X);
+    X_ when erlang:is_float(X_) ->
+      ailib_float:to_binary(X);
+    X_ when erlang:is_boolean(X_) ->
+      ailib_boolean:to_binary(X);
+    X_ when erlang:is_list(X_) ->
+      ailib_list:to_binary(X);
+    _ ->
+      ailib:not_implemented(?MODULE, to_binary, X)
+  end.
 
--spec to_binary(binary()|list()|integer()
-                |float()|atom()|boolean()) -> binary().
-to_binary(Val) when erlang:is_integer(Val) -> erlang:integer_to_binary(Val);
-to_binary(Val) when erlang:is_float(Val) -> erlang:list_to_binary(io_lib:format("~w", [Val]));
-to_binary(Val) when erlang:is_boolean(Val) -> erlang:atom_to_binary(Val,latin1);
-to_binary(Val) when erlang:is_atom(Val) -> erlang:atom_to_binary(Val,utf8);
-%% iolist场景
-to_binary(Val) when erlang:is_list(Val)  ->
-  try
-    erlang:iolist_to_binary(Val)
-  catch
-    _Reason:_Error -> unicode:characters_to_binary(Val)
-  end;
-to_binary(Val) when erlang:is_binary(Val)-> Val.
-
--spec to_binary(string(),
-                 binary()|list()|integer()
-                |float()|atom()|boolean()) -> binary().
+-spec to_binary(string(),any()) -> binary().
 to_binary(Format,Val) ->to_binary(io_lib:format(Format,[Val])).
 
 -spec to_iolist(list()|binary())-> iolist().
