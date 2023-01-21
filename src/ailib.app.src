@@ -1,0 +1,14 @@
+{application, ailib,
+ [{description, "A library for ailink.io"},
+  {vsn, "0.4.6"},
+  {registered, []},
+  {applications,
+   [kernel,
+    stdlib
+   ]},
+  {env,[]},
+  {modules, []},
+
+  {licenses, ["BSD 3.0"]},
+  {links, []}
+ ]}.
