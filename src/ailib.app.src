@@ -1,6 +1,6 @@
 {application, ailib,
- [{description, "An OTP library"},
-  {vsn, "0.1.0"},
+ [{description, "A library for ailink.io"},
+  {vsn, "0.4.7"},
   {registered, []},
   {applications,
    [kernel,
